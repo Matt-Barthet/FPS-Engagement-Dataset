@@ -2,8 +2,6 @@ import numpy as np
 from plotting import *
 from collections import defaultdict, Counter
 
-KEEP_DIRECTION_ONLY = True
-
 def calculate_median_signal(data_dict):
     all_game_names = sorted(set(game_name for session_data in data_dict.values() 
                                 for participant_data in session_data.values() 
@@ -150,6 +148,7 @@ if __name__ == "__main__":
     plot_engagement_data(engagement_data, None)
     np.save("./Engagement_Median.npy", median_signals_dict)
 
+    exit()
     individual_matrices = create_individual_matrices(engagement_data)
     agreement_matrices = calculate_agreement_matrices(individual_matrices)
     # plot_engagement_data(ordinal_data, None)

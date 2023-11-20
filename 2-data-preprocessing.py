@@ -5,7 +5,7 @@ import pandas as pd
 
 TW_SIZE = 250 # Milliseconds
 NORMALIZE = True # MinMax Normalization
-MIN_CHANGES = 3 # Minimum amount of changes for annotation to be considered valid.
+MIN_CHANGES = 1 # Minimum amount of changes for annotation to be considered valid.
 
 idg_annotators_session1 = ["BD7CE04E-99E3-7FA4-A15B-5625CD981638", "F868E6ED-CA85-FD16-942C-BE70BB997450", "1D8DFC94-778B-0969-9390-9F8A5B9C33EE", "89DA2498-EB31-04AF-2921-AEA70D626881", "49CAE400-6726-5DE5-398E-179FAD35B00A"]
 idg_annotators_session2 = ['2EEEFB7F-9312-F08D-97CA-28A3B631D29E', "3865D7ED-91D3-6EF6-DB13-DD7C46D9034E", "BA3206C6-52F9-5900-5A81-2188D3E88B59", "ED4B536F-21B5-262C-61BC-A4396AFC016B", "62FF5C7F-4E6B-BB00-3FE0-F8752641A074"]
@@ -227,7 +227,12 @@ if __name__ == "__main__":
 
     visual_data, audio_data, engagement_data = remove_bad_sessions(visual_data, audio_data, engagement_data)
     
-    print(engagement_data.keys())
+    for session_id, session_df in engagement_data.items():
+        for group_id, group_df in session_df.items():
+            print(f"{session_id}-{group_id}: {group_df.keys()}")
+
+    for key in engagement_data['Session-9']['Expert'].keys():
+        print(len(engagement_data['Session-9']['Expert'][key]))
 
     np.save("Audio_Task.npy", audio_data)
     np.save("Visual_Task.npy", visual_data)

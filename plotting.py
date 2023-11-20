@@ -4,51 +4,54 @@ from utility_functions import *
 from matplotlib.colors import ListedColormap
 import seaborn as sns
 
+time_windows = 250
 
 def plot_brightness_and_pitch_data(session, session_ids, group, title, gt_signal, sound=False,start=0):
-    plt.figure(figsize=(8, 4))
 
-
-    labels = [f'P{i+1+start}' for i in range(10)]
-
+    labels = [f'P{i+1+start}' for i in range(20)]
     counter = 0
-    if not sound:
-        plt.plot(gt_signal[:240], color ="black", lw=2, marker='o', markevery=4, label="GT")
-        plt.xticks([0, 60, 120, 180, 240], [0, 15, 30, 45, 60])
-        plt.xlim(xmin=-1, xmax=241)
-        for session_id, session_data in session.items():
-            if session_id in session_ids:
+    for session_id, session_data in session.items():
+        if session_id in session_ids:
+
+            plt.figure(figsize=(8, 4))
+
+            if not sound:
+                plt.plot(gt_signal[:int(61 * (1000 / time_windows))], color ="black", lw=2, marker='o', markevery=4, label="GT")
+                # plt.xticks([0, 60, 120, 180, 240], [0, 15, 30, 45, 60])
+                plt.xlim(xmin=-1, xmax=int(61 * (1000 / time_windows)))
                 for _, participant_data in session_data[group].items():
-                    plt.plot(list(participant_data.values())[0][:240], alpha=0.75, label=labels[counter])
+                    plt.plot(list(participant_data.values())[0][:int(61 * (1000 / time_windows))], alpha=0.75, label=labels[counter])
                     counter+=1
-    else:
-        plt.xticks([0, 40, 80, 120], [0, 10, 20, 30])
-        plt.plot(gt_signal[:120], color ="black", lw=2, marker='o', markevery=4, label='GT')
-        plt.xlim(xmin=-1, xmax=121)
-        for session_id, session_data in session.items():
-            if session_id in session_ids:
+            else:
+                # plt.xticks([0, 40, 80, 120], [0, 10, 20, 30])
+                plt.plot(gt_signal[:int(31 * (1000 / time_windows))], color ="black", lw=2, marker='o', markevery=4, label='GT')
+                plt.xlim(xmin=-1, xmax=int(31 * (1000 / time_windows)))
                 for _, participant_data in session_data[group].items():
-                    plt.plot(list(participant_data.values())[0][:120], alpha=0.75, label=labels[counter])
+                    plt.plot(list(participant_data.values())[0][:int(31 * (1000 / time_windows))], alpha=0.75, label=labels[counter])
                     counter+=1
 
-    plt.title(f'{title}')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Value')
-    plt.tight_layout()
-    plt.legend(bbox_to_anchor=(1.2,1.03), loc='upper right')
-    plt.subplots_adjust(right=0.846)
-    plt.show()
+            if sound:
+                title = "Audio"
+            else:
+                title = "Visual"
+            plt.title(f'{session_id}: {title} QA ({group})')
+            plt.xlabel(f'Time ({time_windows} ms TW)')
+            plt.ylabel('Value')
+            plt.tight_layout()
+            plt.legend(bbox_to_anchor=(1.2,1.03), loc='upper right')
+            plt.subplots_adjust(right=0.846)
+            plt.savefig(f"./Figures/{session_id}-{title}-QA({group}).png")
 
 def plot_game_traces(traces, median, start=0):
     colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     print(colors)
     labels = [f'P{i+1+start}' for i in range(10)]
     plt.figure(figsize=(8, 4))
-    plt.plot(median[:240], color ="black", lw=2, marker='o', markevery=4, label='GT')
+    plt.plot(median[:60], color ="black", lw=2, marker='o', markevery=4, label='GT')
     for trace in range(len(traces)):
-        plt.plot(traces[trace][:240], alpha=0.75, label=labels[trace], color=colors[trace+start % 10])
-    plt.xticks([0, 60, 120, 180, 240], [0, 15, 30, 45, 60])
-    plt.xlim(xmin=-1, xmax=241)
+        plt.plot(traces[trace][:60], alpha=0.75, label=labels[trace], color=colors[trace+start % 10])
+    # plt.xticks([0, 60, 120, 180, 240], [0, 15, 30, 45, 60])
+    plt.xlim(xmin=-1, xmax=61)
     plt.legend(bbox_to_anchor=(1.2,0.78), loc='upper right')
     plt.subplots_adjust(right=0.846)
     plt.xlabel('Time (s)')
@@ -78,6 +81,8 @@ def plot_engagement_data(data_dict, median_signals_dict):
                             median_time_values = np.arange(0, len(median_signal))
                             ax.plot(median_time_values, median_signal, color='black', linewidth=2)   
                         ax.set_title(game_name)
+                        # ax.legend()
+
                     except TypeError:
                         pass
             plt.savefig(f"./Figures/{session_id}-{group_id}.png")

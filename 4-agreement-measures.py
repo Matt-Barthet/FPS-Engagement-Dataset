@@ -63,23 +63,25 @@ if __name__ == "__main__":
     # all session files and pagan annotations are stored on shared google drive
     pagan_data_link = './'
 
+    time_windows = 250
+
     # ground truth data for pitch task
     pitch_gt_trace = pd.read_csv(os.path.join(pagan_data_link, f'{pagan_task_names[1]}_values.csv'))['Value'].to_numpy()
-    pitch_gt_trace = (np.interp(pitch_gt_trace, (pitch_gt_trace.min(), pitch_gt_trace.max()), (0, 1)))[::15]
+    pitch_gt_trace = (np.interp(pitch_gt_trace, (pitch_gt_trace.min(), pitch_gt_trace.max()), (0, 1)))[::int(15 * (time_windows / 250))]
 
     green_gt_trace = pd.read_csv(os.path.join(pagan_data_link, f'{pagan_task_names[0]}_values.csv'))['Value'].to_numpy()
-    green_gt_trace = (np.interp(green_gt_trace, (green_gt_trace.min(), green_gt_trace.max()), (0, 1)))[::15]
+    green_gt_trace = (np.interp(green_gt_trace, (green_gt_trace.min(), green_gt_trace.max()), (0, 1)))[::int(15 * (time_windows / 250))]
 
     engagement_data = np.load("./Engagement_Task.npy", allow_pickle=True).item()
     visual_data = np.load("./Visual_Task.npy", allow_pickle=True).item()
     audio_data = np.load("./Audio_Task.npy", allow_pickle=True).item()
     median_data = np.load("./Engagement_Median.npy", allow_pickle=True).item()
 
-    # plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2"], "Expert", "", green_gt_trace)
-    # plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2"], "Mturk", "", green_gt_trace)
+    plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2", "Session-3", "Session-7"], "Expert", "", green_gt_trace)
+    plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2", "Session-3"], "Mturk", "", green_gt_trace)
 
-    # plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2"], "Expert", "", pitch_gt_trace, True)
-    # plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2"], "Mturk", "", pitch_gt_trace, True)
+    plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2", "Session-3", "Session-7"], "Expert", "", pitch_gt_trace, True)
+    plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2", "Session-3"], "Mturk", "", pitch_gt_trace, True)
 
     sdas = {}
 
