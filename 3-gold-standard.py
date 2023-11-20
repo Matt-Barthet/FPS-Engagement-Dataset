@@ -145,10 +145,9 @@ if __name__ == "__main__":
                 del engagement_data[session_id][group_id]
     
     median_signals_dict = calculate_median_signal_excluding(engagement_data)
-    plot_engagement_data(engagement_data, None)
+    # plot_engagement_data(engagement_data, None)
     np.save("./Engagement_Median.npy", median_signals_dict)
 
-    exit()
     individual_matrices = create_individual_matrices(engagement_data)
     agreement_matrices = calculate_agreement_matrices(individual_matrices)
     # plot_engagement_data(ordinal_data, None)

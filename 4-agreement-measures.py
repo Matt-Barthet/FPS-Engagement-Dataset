@@ -33,9 +33,8 @@ def participant_sda_gt_signal(participant_data, function, gt_signal):
 
 def compute_correlations(sda_scores, label):
     correlations = {}
-
     for session_id, session_data in sda_scores.items():
-        for group_id, group_data in session_data.items():
+        for _, group_data in session_data.items():
             game_names = set(game for participant_data in group_data.values() for game in participant_data['Engagement'].keys())
             for game in game_names:
                 game_sdas = [participant_data['Engagement'].get(game) for participant_data in group_data.values()
@@ -50,6 +49,16 @@ def compute_correlations(sda_scores, label):
                 correlations[f"{session_id}-{game}"] = correlation
     return correlations
 
+def count_changes(arr):
+    arr = np.asarray(arr)
+    if len(arr) < 2:
+        return 0
+    
+    change_count = 0
+    for i in range(len(arr) - 1):
+        if arr[i] != arr[i + 1]:
+            change_count += 1
+    return change_count
 
 if __name__ == "__main__":
 
@@ -77,11 +86,11 @@ if __name__ == "__main__":
     audio_data = np.load("./Audio_Task.npy", allow_pickle=True).item()
     median_data = np.load("./Engagement_Median.npy", allow_pickle=True).item()
 
-    plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2", "Session-3", "Session-7"], "Expert", "", green_gt_trace)
-    plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2", "Session-3"], "Mturk", "", green_gt_trace)
+    #plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2", "Session-3", "Session-7"], "Expert", "", green_gt_trace)
+    #plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2", "Session-3"], "Mturk", "", green_gt_trace)
 
-    plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2", "Session-3", "Session-7"], "Expert", "", pitch_gt_trace, True)
-    plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2", "Session-3"], "Mturk", "", pitch_gt_trace, True)
+    #plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2", "Session-3", "Session-7"], "Expert", "", pitch_gt_trace, True)
+    #plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2", "Session-3"], "Mturk", "", pitch_gt_trace, True)
 
     sdas = {}
 
@@ -112,17 +121,29 @@ if __name__ == "__main__":
         for group_name, group_data in participants.items():
             for participant_id, participant_data in group_data.items():
                 sdas[f"{session_id}"][group_name][participant_id]['Engagement'] = {}
+                lengths = []
+                ranges = []
                 for game_id, game_data in participant_data.items():
                     if game_id in median_data[session_id][group_name][participant_id]:
                         median_trace = median_data[session_id][group_name][participant_id][game_id]
                         try:
                             sdas[f"{session_id}"][group_name][f"{participant_id}"]["Engagement"][game_id] = sda(game_data, median_trace)
+                            lengths.append(count_changes(game_data))
+                            ranges.append(np.max(game_data) - np.min(game_data))
                         except TypeError:
                             sdas[f"{session_id}"][group_name][f"{participant_id}"]["Engagement"][game_id] = 0
-    
+                            lengths.append(0)
+                            ranges.append(0)
+
+                print(lengths)
+                sdas[f"{session_id}"][group_name][participant_id]['Lengths'] = np.ceil(np.mean(lengths))
+                sdas[f"{session_id}"][group_name][participant_id]['Ranges'] = np.ceil(np.mean(ranges))
+
 
     visual_sdas, audio_sdas, engagement_sdas = [], [], []
-
+    lengths = []
+    ranges = []
+    
     for session_id, session_data in sdas.items():
         for group_name, group_data in session_data.items():
             print(f"\nSESSION:{session_id}")
@@ -133,22 +154,44 @@ if __name__ == "__main__":
                 visual_sdas.append(np.round(participant_data['Visual_SDA'], 4))
                 audio_sdas.append(np.round(participant_data['Audio_SDA'], 4))
                 engagement_sdas.append(mean_sda)
+                lengths.append(participant_data['Lengths'])
+                ranges.append(participant_data['Ranges'])
+
+    plt.figure()
+
+    # Creating the scatter plot
+    plt.scatter(lengths, engagement_sdas)
+
+    # Adding titles and labels
+    plt.xlabel('Number of Changes in Trace')
+    plt.ylabel('SDA')
+
+
+    plt.figure()
+
+    # Creating the scatter plot
+    plt.scatter(ranges, engagement_sdas)
+
+    # Adding titles and labels
+    plt.xlabel('Range of the Trace (Maximum vs Minimum)')
+    plt.ylabel('SDA')
+
+
+    # Displaying the plot
+    plt.show()
 
     deleted = 0
-    print(len(visual_sdas))
+
     for i in range(len(visual_sdas)):
         if visual_sdas[i - deleted] == 0 or audio_sdas[i - deleted] == 0:
             del visual_sdas[i - deleted]
             del audio_sdas[i - deleted]
             del engagement_sdas[i - deleted]
             deleted += 1
+                
 
-    print(len(visual_sdas))
     correlation_visual = pearsonr(visual_sdas, engagement_sdas)
     correlation_audio = pearsonr(audio_sdas, engagement_sdas)
-
-    print (correlation_visual)
-    print (correlation_audio)
 
     visual_correlations = compute_correlations(sdas, "Visual_SDA")
     audio_correlations = compute_correlations(sdas, "Audio_SDA")
