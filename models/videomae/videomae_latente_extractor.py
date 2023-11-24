@@ -1,14 +1,19 @@
-import torch
-import numpy as np
-
-from pathlib import Path
-from transformers import AutoImageProcessor, VideoMAEModel
-from utils.extract_frames import sample_frames
-from tqdm import tqdm
-from typing import Union
 import os
+import random
+from pathlib import Path
+from typing import Union
+
+import numpy as np
+import torch
+from tqdm import tqdm
+from transformers import AutoImageProcessor, VideoMAEModel
+
+from utils.extract_frames import sample_frames
 
 np.random.seed(0)
+torch.manual_seed(0)
+random.seed(0)
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
