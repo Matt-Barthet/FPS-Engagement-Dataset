@@ -2,8 +2,8 @@ from pathlib import Path
 from models.videomae.videomae_latente_extractor import extract_latents
 
 
-FILE_PATH = r"C:\Users\rasajski\Downloads\apexlegends\0.mp4"
-SAVE_DIRECTORY = Path(r"C:\Users\rasajski\Downloads\save")
+FILE_PATH = r""
+SAVE_DIRECTORY = Path(r"")
 
 SAVE_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
