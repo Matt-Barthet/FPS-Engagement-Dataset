@@ -1,5 +1,6 @@
 import os
 import random
+import warnings
 from pathlib import Path
 from typing import Union
 
@@ -39,11 +40,13 @@ def extract_latents(input_video_filepath: str, output_directory: Union[str, Path
     """
     file_name = _extract_file_name(input_video_filepath)
     videos = sample_frames(input_video_filepath)
-    for idx, video in tqdm(enumerate(videos)):
+    for idx, video in tqdm(enumerate(videos), desc=f"Creating latents from video: {file_name}"):
         save_filename = f"{output_directory}/{file_name}_{idx}.pt"
         if os.path.isfile(save_filename) and skip_existing:
             continue
-        inputs = image_processor(list(video), return_tensors="pt").to(device)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            inputs = image_processor(list(video), return_tensors="pt").to(device)
         with torch.no_grad():
             outputs = model(**inputs)
         last_hidden_states = outputs.last_hidden_state
