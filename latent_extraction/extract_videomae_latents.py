@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from models.videomae.videomae_latente_extractor import extract_latents
+from models.videomae.videomae_latent_extractor import extract_latents
 
 # Download data from this link: https://drive.google.com/file/d/1nKzAZATJFhXr1OXmhmRRrmg0P2WQYbRL/view?usp=drive_link
 # Set ROOT_DIRECTORY to the path where you downloaded and unpacked above link
@@ -12,6 +12,8 @@ SAVE_DIRECTORY = Path(r"SAVE_DIRECTORY")
 MEAN_POOL = True
 # Skip already existing latents
 SKIP = False
+# Sampling window in seconds
+WINDOW = 1
 
 SAVE_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
@@ -23,4 +25,5 @@ if __name__ == "__main__":
         out_subdirectory_path.mkdir(parents=True, exist_ok=True)
         print(f"Generating latents for session {in_subdirectory_name}:")
         for in_file_path in in_subdirectory_path.glob("*.mp4"):
-            extract_latents(str(in_file_path), out_subdirectory_path, mean_pool=MEAN_POOL, skip_existing=SKIP)
+            extract_latents(str(in_file_path), out_subdirectory_path, window=WINDOW, mean_pool=MEAN_POOL,
+                            skip_existing=SKIP)
