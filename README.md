@@ -27,7 +27,7 @@ In addition to these, the pre-trained model version can be changed in `models.vi
 4. Run with command `python -m latent_extraction.extract_videomae_latents`
    - If you get an error similar to: `PermissionError: [Errno 13] Permission denied: '/media/storage/model_checkpts/huggingface/.locks`, don't use `sudo`, just change transformers library cache location with `export TRANSFORMERS_CACHE='/home/YOUR_USERNAME/.cache'`
 ## BEATs embedding extraction
-Data will be added to drive shortly
+Download audio only from here: https://drive.google.com/drive/folders/1V2Wdxm9hcnkIzf3Ur2ftg7YCrl7JfvVl?usp=drive_link
 ### Running
 #### On local machine in PyCharm
 1. Clone unilm/beats repository: https://github.com/microsoft/unilm/tree/master/beats
