@@ -2,24 +2,13 @@ import numpy as np
 from scipy import stats
 from itertools import combinations
 from sklearn.metrics import cohen_kappa_score
-import matplotlib.pyplot as plt
 from krippendorff import alpha
+from dtw import dtw
+import numpy as np
+import matplotlib.pyplot as plt
 
-"""def sda(trace1, trace2):
-  N = min(len(trace1),len(trace2))
-  trace1, trace2 = trace1[:N], trace2[:N]
-  sda = 0
-  for i in range(1, N):
-      p = trace1[i] - trace1[i-1]
-      q = trace2[i] - trace2[i-1]
-      p = np.sign(p)
-      q = np.sign(q)
-      if p == q:
-          sda += 1
-      else:
-          sda -= 1
-  sda = sda / (N - 1)
-  return sda"""
+def dtw_distance(signal1, signal2):
+  return dtw(signal1, signal2).distance
 
 def sda(trace1, trace2, plot=False):
     N = min(len(trace1),len(trace2))
@@ -33,33 +22,18 @@ def sda(trace1, trace2, plot=False):
         else:
             sda.append(-1)
     sdas = np.sum(sda) / (N-1)
-
-    if plot:
-      plot_trace(trace1, trace2, sda)
     return sdas
 
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-def plot_trace(trace1, trace2, sda):
-    plt.figure()
-    plt.plot(range(len(trace1)), trace1)
-    plt.plot(range(len(trace2)), trace2)
+def count_changes(arr):
+    arr = np.asarray(arr)
+    if len(arr) < 2:
+        return 0
     
-    for i in range(1, len(sda)):
-        color = 'green' if sda[i] >= 0 else 'red'
-        plt.fill_between([i-1, i], trace1[i-1:i+1], trace2[i-1:i+1], 
-                         color=color, alpha=0.3)
-
-    green_patch = plt.Rectangle((0,0),1,1,fc="green", edgecolor = 'none', alpha=0.3)
-    red_patch = plt.Rectangle((0,0),1,1,fc="red", edgecolor = 'none', alpha=0.3)
-    plt.legend([green_patch, red_patch], ['Agree', 'Disagree'], loc="upper left")
-    plt.xlabel("Time")
-    plt.ylabel("Value")
-    plt.show()
-
-
+    change_count = 0
+    for i in range(len(arr) - 1):
+        if arr[i] != arr[i + 1]:
+            change_count += 1
+    return change_count
 
 def compute_confidence_interval(data, confidence=0.95):
     data = np.array(data)  # Ensure the input data is a numpy array

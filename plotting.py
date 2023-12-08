@@ -1,9 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from utility_functions import *
+import matplotlib
 from matplotlib.colors import ListedColormap
 import seaborn as sns
-
+import math
 time_windows = 250
 
 def plot_brightness_and_pitch_data(session, session_ids, group, title, gt_signal, sound=False,start=0):
@@ -60,6 +61,57 @@ def plot_game_traces(traces, median, start=0):
     plt.show()
 
 
+def plot_highlighted_engagement_data(data_dict, distance_matrices, groups=['Expert']):
+    all_game_names = sorted(set(game_name for session_data in data_dict.values() for group_data in session_data.values() for participant_data in group_data.values()
+                                for game_name in participant_data.keys()))
+    game_to_index = {game_name: index for index, game_name in enumerate(all_game_names)}
+
+    for session_id, session_data in distance_matrices.items():
+        # Calculate the threshold for each session
+        min_distances = []
+        for _, games in session_data.items():
+            for _, matrix in games.items():
+                for i in range(len(matrix)):
+                    distances = matrix[i, :]
+                    non_zero_distances = distances[np.nonzero(distances)]
+                    if non_zero_distances.size > 0:
+                        min_distances.append(np.min(non_zero_distances))
+
+        mean_val = np.mean(min_distances)
+        std_dev = np.std(min_distances)
+        distance_threshold = mean_val + 2 * std_dev
+
+        min_distances_dict = {}
+        for _, games in session_data.items():
+            for game_id, matrix in games.items():
+                for participant_id in range(len(matrix)):
+                    distances = matrix[participant_id, :]
+                    non_zero_distances = distances[np.nonzero(distances)]
+                    if non_zero_distances.size > 0:
+                        min_distance = np.min(non_zero_distances)
+                        if min_distance > distance_threshold:
+                            min_distances_dict[(game_id, participant_id)] = min_distance
+
+        for group_id, group_data in data_dict[session_id].items():
+            if group_id not in groups:
+                continue
+            fig, axes = plt.subplots(5, 6, figsize=(14, 10), constrained_layout=True)
+            fig.suptitle(f"Highlighted Engagement Outliers for {session_id} - DTW > {distance_threshold}", fontsize=16)
+            axes = axes.flatten()
+            for ids, (participant_id, participant_data) in enumerate(group_data.items()):
+                for game_name, game_values in participant_data.items():
+                    try:
+                        ax = axes[game_to_index[game_name]]
+                        time_values = np.arange(0, len(game_values))
+                        alpha_value = 0.3 if (game_name, ids) not in min_distances_dict else 1.0
+                        ax.plot(time_values, game_values, label=participant_id, alpha=alpha_value)
+                        ax.set_title(game_name)
+                    except TypeError:
+                        pass
+            plt.savefig(f"./Data Analysis/Figures/{session_id}-{group_id}_highlighted_threshold{distance_threshold}.png")
+            plt.close()
+
+
 def plot_engagement_data(data_dict, median_signals_dict):
     all_game_names = sorted(set(game_name for session_data in data_dict.values() for group_data in session_data.values() for participant_data in group_data.values()
                                 for game_name in participant_data.keys()))
@@ -85,8 +137,155 @@ def plot_engagement_data(data_dict, median_signals_dict):
 
                     except TypeError:
                         pass
+            plt.savefig(f"./Data Analysis/Figures/{session_id}-{group_id}.png")
+            plt.close()
+
+
+def plot_distance_histogram(distance_matrices, bins=30, xlabel='DTW Distance', ylabel='Frequency'):
+    for session_id, _ in distance_matrices.items():
+        all_distances = []
+        for _, games in distance_matrices[session_id].items():
+            for _, matrix in games.items():
+                distances = matrix[np.triu_indices_from(matrix, k=1)]
+                all_distances.extend(distances)
+        all_distances = np.array(all_distances)
+        plt.figure(figsize=(8, 6))
+        plt.hist(all_distances, bins=bins, color='blue', edgecolor='black')
+        plt.title(f'Distance Histogram for {session_id}-Experts')
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.savefig(f"./Data Analysis/Figures/DTW_Hist_{session_id}.png")
+       
+
+def plot_minimum_distance_histogram(distance_matrices, bins=30, xlabel='DTW Distance', ylabel='Frequency'):
+    for session_id, _ in distance_matrices.items():
+        min_distances = []
+        for _, games in distance_matrices[session_id].items():
+            for _, matrix in games.items():
+                for i in range(len(matrix)):
+                    distances = matrix[i, :]
+                    non_zero_distances = distances[np.nonzero(distances)]
+                    if non_zero_distances.size > 0:
+                        min_distances.append(np.min(non_zero_distances))
+        
+        print(session_id, len(min_distances))
+        plt.figure(figsize=(8, 6))
+        plt.hist(min_distances, bins=bins, color='blue', edgecolor='black')
+        plt.title(f'Minimum DTW Histogram for {session_id}-Experts')
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.savefig(f"./Data Analysis/Figures/DTW_Hist_Minimums_{session_id}.png")
+        plt.close()
+
+
+def plot_minimum_distance_histogram(distance_matrices, bins=30, xlabel='DTW Distance', ylabel='Frequency'):
+    for session_id, _ in distance_matrices.items():
+        min_distances = []
+        for _, games in distance_matrices[session_id].items():
+            for _, matrix in games.items():
+                for i in range(len(matrix)):
+                    distances = matrix[i, :]
+                    non_zero_distances = distances[np.nonzero(distances)]
+                    if non_zero_distances.size > 0:
+                        min_distances.append(np.min(non_zero_distances))
+
+        print(session_id, len(min_distances))
+        plt.figure(figsize=(8, 6))
+        plt.hist(min_distances, bins=bins, color='blue', edgecolor='black')
+
+        # Calculate mean and standard deviation
+        mean_val = np.mean(min_distances)
+        std_dev = np.std(min_distances)
+        
+        # Plot mean, and 1 and 2 standard deviations from the mean
+        plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=1, label='Mean')
+        plt.axvline(mean_val + std_dev, color='green', linestyle='dashed', linewidth=1, label='Mean + 1 SD')
+        plt.axvline(mean_val + 2 * std_dev, color='purple', linestyle='dashed', linewidth=1, label='Mean + 2 SD')
+
+        plt.title(f'Minimum DTW Histogram for {session_id}-Experts')
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.legend()
+        plt.savefig(f"./Data Analysis/Figures/DTW_Hist_Minimums_{session_id}.png")
+        plt.close()
+
+
+def plot_distance_matrices(distance_matrices, output_dir='./Data Analysis/Figures', rows_per_figure=4):
+
+    colors = ['blue', 'orange', 'green', 'red', 'purple']
+
+    for session_id, groups in distance_matrices.items():
+        for group_id, games in groups.items():
+            num_games = len(games)
+            cols = math.ceil(num_games / rows_per_figure)
+            fig, axes = plt.subplots(rows_per_figure, cols, figsize=(cols * 4, rows_per_figure * 4), constrained_layout=True)
+            
+            if rows_per_figure == 1 or cols == 1:  # Handle case for a single row or column
+                axes = axes.flatten()
+
+            fig.suptitle(f"Distance Matrices for Session {session_id}, Group {group_id}", fontsize=16)
+
+            # Determine the global min and max values for all matrices
+            global_min = min(matrix.min() for matrix in games.values())
+            global_max = max(matrix.max() for matrix in games.values())
+
+            ax_iter = iter(axes.flatten())
+            for game_id, matrix in games.items():
+                ax = next(ax_iter)
+                cax = ax.imshow(matrix, cmap='copper', interpolation='nearest', vmin=global_min, vmax=global_max)
+                ax.set_title(game_id)
+                ax.set_xlabel('Participant')
+                ax.set_ylabel('Participant')
+                ax.set_xticklabels( ['', 'blue', 'orange', 'green', 'red', 'purple'])
+
+                ax.set_yticklabels( ['', 'blue', 'orange', 'green', 'red', 'purple'])
+
+                # Annotate each cell with the distance value
+                for i in range(len(matrix)):
+                    for j in range(len(matrix)):
+                        text_color = 'w' if matrix[i, j] > (global_max - global_min) / 2 else 'w'
+                        ax.text(j, i, f'{matrix[i, j]:.2f}', ha="center", va="center", color=text_color)
+
+            # Turn off axes for any unused subplots
+            for ax in ax_iter:
+                ax.axis('off')
+
+            # Create a single color bar
+            fig.colorbar(cax, ax=axes.ravel().tolist(), orientation='horizontal', pad=0.01)
+
+            plt.savefig(f"{output_dir}/{session_id}-{group_id}-Matrix.png")
+            plt.close()
+
+
+
+
+def game_dtw_scatter(data_dict):
+    all_game_names = sorted(set(game_name for session_data in data_dict.values() for group_data in session_data.values() for participant_data in group_data.values()
+                                for game_name in participant_data['Engagement'].keys()))
+    game_to_index = {game_name: index for index, game_name in enumerate(all_game_names)}
+
+    for session_id, session_data in data_dict.items():
+        for group_id, group_data in session_data.items():
+            fig, axes = plt.subplots(5, 6, figsize=(14, 10), constrained_layout=True)
+            # fig.suptitle(f"Resampled Engagement Data for Session {session_id}", fontsize=16)
+            axes = axes.flatten()
+            for participant_id, participant_data in group_data.items():
+                for game_name, game_values in participant_data["Engagement"].items():
+                    try:
+                        ax = axes[game_to_index[game_name]]
+                        engagement_agreement = game_values
+                        qa_agreement = np.mean([session_data[group_id][participant_id]['Visual_SDA'], session_data[group_id][participant_id]['Audio_SDA']])
+                        ax.scatter(qa_agreement, engagement_agreement, label=participant_id)
+                        ax.set_title(game_name)
+                        ax.set_xlim([0, 7])
+                        ax.set_ylim([0, 40])
+                        # ax.legend()
+
+                    except TypeError:
+                        pass
             plt.savefig(f"./Figures/{session_id}-{group_id}.png")
             plt.close()
+
 
 def plot_game_sda_histogram(game_sda_list, session_mean, session_ci, session_id):
     plt.figure(figsize=(10,6))
@@ -136,37 +335,15 @@ def plot_sda_scatter_grouped(sda_scores):
     plt.figure(figsize=(7, 5))
     plt.errorbar(qa_mturks, engagement_mturks, label="Crowdworkers", fmt="D", yerr=mturks_ci, markeredgecolor="black")
     plt.errorbar(qa_experts, engagement_experts, label="Experts", fmt="o", yerr=experts_ci, markeredgecolor="black")
-    plt.ylabel('Mean SDA (Engagement Tasks)')
-    plt.xlabel('Mean SDA (QA Tasks)')
+    plt.ylabel('Mean DTW (Engagement Tasks)')
+    plt.xlabel('Mean DTW (QA Tasks)')
     # plt.title('SDA Scatter (Visual Task)')
-    plt.xlim([-1, 1])
-    plt.ylim([-1, 1])
+    # plt.xlim([-1, 1])
+    # plt.ylim([-1, 1])
     plt.legend(loc="upper center", ncols=2, bbox_to_anchor=(0.5, 1.15))
-    plt.hlines(y=0, xmin=-1, xmax=1, color="black")
-    plt.vlines(x=0, ymin=-1, ymax=1, color="black")
+    # plt.hlines(y=0, xmin=-1, xmax=1, color="black")
+    # plt.vlines(x=0, ymin=-1, ymax=1, color="black")
     plt.show()
-
-    """plt.figure(figsize=(8, 6))
-    plt.scatter(visual_mturks, engagement_mturks, label="Crowdworkers")
-    plt.scatter(visual_experts, engagement_experts, label="Experts")
-    plt.ylabel('Mean SDA (Engagement Tasks)')
-    plt.xlabel('SDA (Visual Task)')
-    plt.title('SDA Scatter (Visual Task)')
-    plt.xlim([-1, 1])
-    plt.ylim([-1, 1])
-    plt.legend()
-    plt.show()
-
-    plt.figure(figsize=(8, 6))
-    plt.scatter(audio_mturks, engagement_mturks, label="Crowdworkers")
-    plt.scatter(audio_experts, engagement_experts, label="Experts")
-    plt.ylabel('Mean SDA (Engagement Tasks)')
-    plt.xlabel('SDA (Audio Task)')
-    plt.title('SDA Scatter (Audio Task)')
-    plt.xlim([-1, 1])
-    plt.ylim([-1, 1])
-    plt.legend()
-    plt.show()"""
 
 def plot_correlations(audio_correlations, visual_correlations, sort=True, title=""):
     if sort:
@@ -238,3 +415,28 @@ def plot_individual_matrix(IM, title):
     plt.tight_layout()
     plt.show()
 
+def plot_trace(trace1, trace2, sda):
+    plt.figure()
+    plt.plot(range(len(trace1)), trace1)
+    plt.plot(range(len(trace2)), trace2)
+    for i in range(1, len(sda)):
+        color = 'green' if sda[i] >= 0 else 'red'
+        plt.fill_between([i-1, i], trace1[i-1:i+1], trace2[i-1:i+1], 
+                         color=color, alpha=0.3)
+    green_patch = plt.Rectangle((0,0),1,1,fc="green", edgecolor = 'none', alpha=0.3)
+    red_patch = plt.Rectangle((0,0),1,1,fc="red", edgecolor = 'none', alpha=0.3)
+    plt.legend([green_patch, red_patch], ['Agree', 'Disagree'], loc="upper left")
+    plt.xlabel("Time")
+    plt.ylabel("Value")
+    plt.show()
+
+
+def execute():
+    font = {'size': 14}
+    matplotlib.rc('font', **font)
+
+    # plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2", "Session-3", "Session-7"], "Expert", "", green_gt_trace)
+    # plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2", "Session-3"], "Mturk", "", green_gt_trace)
+
+    # plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2", "Session-3", "Session-7"], "Expert", "", pitch_gt_trace, True)
+    # plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2", "Session-3"], "Mturk", "", pitch_gt_trace, True)

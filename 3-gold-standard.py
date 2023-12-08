@@ -1,5 +1,4 @@
 import numpy as np
-from plotting import *
 from collections import defaultdict, Counter
 
 def calculate_median_signal(data_dict):
@@ -130,9 +129,9 @@ def calculate_agreement_matrices(individual_matrices):
             # plot_individual_matrix(agreement_matrix, f"{session_id}-{game_name}")
     return agreement_matrices
 
-if __name__ == "__main__":
+def execute():
     
-    engagement_data = np.load("./Engagement_Task.npy", allow_pickle=True).item()    
+    engagement_data = np.load("./Processed Data/Session_Dict(Engagement_Task).npy", allow_pickle=True).item()    
     sessions_to_use = ['Session-1', 'Session-2', 'Session-3', 'Session-7']
     groups_to_use = ['Expert', 'Mturk']
 
@@ -145,23 +144,21 @@ if __name__ == "__main__":
                 del engagement_data[session_id][group_id]
     
     median_signals_dict = calculate_median_signal_excluding(engagement_data)
-    # plot_engagement_data(engagement_data, None)
-    np.save("./Engagement_Median.npy", median_signals_dict)
-
     individual_matrices = create_individual_matrices(engagement_data)
     agreement_matrices = calculate_agreement_matrices(individual_matrices)
+
+    np.save("./Processed Data/Engagement_Gold_Standard(Median).npy", median_signals_dict)
+    np.save("./Processed Data/Engagement_Gold_Standard(Busso).npy", median_signals_dict)
+
     # plot_engagement_data(ordinal_data, None)
 
-    # Define the categories
     categories = ['↑', '↓', '=', '']
-
-    # Initialize a counter for each category
     counts = Counter({category: 0 for category in categories})
 
     # Iterate over the agreement matrices
     for session_id, session_data in agreement_matrices.items():
         for group_id, group_data in session_data.items():
-            for game_name, agreement_matrix in group_data.items():
+            for _, agreement_matrix in group_data.items():
                 diagonal_list = []
                 diagonal_matrix = np.full(agreement_matrix.shape, "")
                 for i in range(agreement_matrix.shape[0]):
@@ -172,14 +169,14 @@ if __name__ == "__main__":
                         except IndexError:
                             pass
                 counts.update(Counter(diagonal_list))
-                # plot_individual_matrix(diagonal_matrix, "") # @Kosmas: I double checked this and it works well now.
+                # plot_individual_matrix(diagonal_matrix, "")
 
-    # Create a bar plot of the counts
+    """# Create a bar plot of the counts
     plt.bar(counts.keys(), counts.values())
     plt.xticks(['↑', '↓', '=', ''], ["Increase", "Decrease", "Stable", "Disagreement"])
     plt.xlabel('Category')
     plt.ylabel('Count')
     plt.title('Agreement Labels - Frequencies within 5 TW of Diagonal')
-    plt.show()
+    plt.show()"""
 
 

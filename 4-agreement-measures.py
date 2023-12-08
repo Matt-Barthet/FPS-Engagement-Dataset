@@ -1,35 +1,12 @@
 import numpy as np
 import pandas as pd
 import os
-import matplotlib
-from plotting import *
 from utility_functions import *
 from scipy.stats import pearsonr
-
-PARTICIPANTS_PER_SESSION = -1 # Set to -1 if you don't want to filter based on this variable
-DESIRED_SESSIONS = ['Session-1', 'Session-2', 'Session-3', 'Session-7']
-
-def compute_session_sda(participant_sda_dict, session_data, function, keep_best_instead_mean=False):
-    for participant_id, participant_data in session_data.items():
-        participant_sda_dict[f"{session_id}"][f"{participant_id}"]["Engagement"] = {}
-        for game in participant_data.keys():
-            game_sda_list = []
-            for other_id in session_data.keys():
-                if participant_id != other_id and game in session_data[other_id]:
-                    game_sda = function(participant_data[game], session_data[other_id][game])
-                    game_sda_list.append(game_sda)
-            if game_sda_list:
-                participant_sda_dict[f"{session_id}"][f"{participant_id}"]["Engagement"][game] = np.max(game_sda_list)
-    return participant_sda_dict
-
-def participant_sda_gt_signal(participant_data, function, gt_signal):
-    game_sda_dict = {}
-    game_names = set(game for game in participant_data.keys())
-    for game in game_names:
-        if game in participant_data:
-            game_sda = function(participant_data[game], gt_signal)
-            game_sda_dict[game] = game_sda
-    return game_sda_dict
+from plotting import plot_distance_matrices, plot_engagement_data, plot_distance_histogram, plot_minimum_distance_histogram, plot_highlighted_engagement_data
+from scipy.spatial.distance import squareform
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+from itertools import combinations
 
 def compute_correlations(sda_scores, label):
     correlations = {}
@@ -49,74 +26,115 @@ def compute_correlations(sda_scores, label):
                 correlations[f"{session_id}-{game}"] = correlation
     return correlations
 
-def count_changes(arr):
-    arr = np.asarray(arr)
-    if len(arr) < 2:
-        return 0
-    
-    change_count = 0
-    for i in range(len(arr) - 1):
-        if arr[i] != arr[i + 1]:
-            change_count += 1
-    return change_count
 
-if __name__ == "__main__":
+def create_distance_matrix(engagement_data, distance_function, groups = ['Expert']):
+    distance_matrices = {}
+    for session_id, participants in engagement_data.items():
+        distance_matrices[session_id] = {}
+        for group_name, group_data in participants.items():
+            if group_name not in groups:
+                continue
+            distance_matrices[session_id][group_name] = {}
+            if len(group_data) == 0: # Ignore empty sessions
+                continue
+            participant_ids = list(group_data.keys())
+            for game_id in group_data[participant_ids[0]].keys():
+                distance_matrices[session_id][group_name][game_id] = {}
+                distance_matrix = np.zeros((len(participant_ids), len(participant_ids)))
+                for (i, pid), (j, other_pid) in combinations(enumerate(participant_ids), 2):
+                    distance = distance_function(group_data[pid][game_id], group_data[other_pid][game_id])
+                    distance_matrix[i][j] = distance
+                distance_matrix = (distance_matrix + distance_matrix.T) / 2
+                distance_matrices[session_id][group_name][game_id] = distance_matrix
+    return distance_matrices
 
-    font = {'size': 14}
 
-    matplotlib.rc('font', **font)
+def execute(time_windows, DESIRED_SESSIONS, distance_function):
 
-    # tasks we are interested to evaluate in this work
-    pagan_task_names = ['Brightness', 'Pitch', 'Engagement']
-
-    # all session files and pagan annotations are stored on shared google drive
-    pagan_data_link = './'
-
-    time_windows = 250
-
-    # ground truth data for pitch task
-    pitch_gt_trace = pd.read_csv(os.path.join(pagan_data_link, f'{pagan_task_names[1]}_values.csv'))['Value'].to_numpy()
+    pitch_gt_trace = pd.read_csv('./Processed Data/QA_Audio_GT.csv')['Value'].to_numpy()
     pitch_gt_trace = (np.interp(pitch_gt_trace, (pitch_gt_trace.min(), pitch_gt_trace.max()), (0, 1)))[::int(15 * (time_windows / 250))]
 
-    green_gt_trace = pd.read_csv(os.path.join(pagan_data_link, f'{pagan_task_names[0]}_values.csv'))['Value'].to_numpy()
+    green_gt_trace = pd.read_csv('./Processed Data/QA_Visual_GT.csv')['Value'].to_numpy()
     green_gt_trace = (np.interp(green_gt_trace, (green_gt_trace.min(), green_gt_trace.max()), (0, 1)))[::int(15 * (time_windows / 250))]
 
-    engagement_data = np.load("./Engagement_Task.npy", allow_pickle=True).item()
-    visual_data = np.load("./Visual_Task.npy", allow_pickle=True).item()
-    audio_data = np.load("./Audio_Task.npy", allow_pickle=True).item()
-    median_data = np.load("./Engagement_Median.npy", allow_pickle=True).item()
+    engagement_data = np.load("./Processed Data/Session_Dict(Engagement_Task).npy", allow_pickle=True).item()
+    visual_data = np.load("./Processed Data/Session_Dict(Visual_Task).npy", allow_pickle=True).item()
+    audio_data = np.load("./Processed Data/Session_Dict(Audio_Task).npy", allow_pickle=True).item()
+    median_data = np.load("./Processed Data/Engagement_Gold_Standard(Median).npy", allow_pickle=True).item()
 
-    #plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2", "Session-3", "Session-7"], "Expert", "", green_gt_trace)
-    #plot_brightness_and_pitch_data(visual_data, ["Session-1", "Session-2", "Session-3"], "Mturk", "", green_gt_trace)
-
-    #plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2", "Session-3", "Session-7"], "Expert", "", pitch_gt_trace, True)
-    #plot_brightness_and_pitch_data(audio_data, ["Session-1", "Session-2", "Session-3"], "Mturk", "", pitch_gt_trace, True)
-
-    sdas = {}
+    agreement_dict = {}
 
     for session_id, session_data in visual_data.items():
-        sdas[f"{session_id}"] = {"Expert": {}, "Mturk": {}}
+        agreement_dict[f"{session_id}"] = {"Expert": {}, "Mturk": {}}
         for group_name, group_data in session_data.items():
             participants = list(group_data.keys())
             for participant_id in participants:
-                if (len(participants) < PARTICIPANTS_PER_SESSION and PARTICIPANTS_PER_SESSION != -1) or (len(DESIRED_SESSIONS) != 0 and session_id not in DESIRED_SESSIONS):
-                    try:
-                        del visual_data[session_id][group_name][participant_id]
-                        del audio_data[session_id][group_name][participant_id]
-                        del engagement_data[session_id][group_name][participant_id]
-                    except KeyError:
-                        print(session_id, group_name, participant_id)
+                if len(DESIRED_SESSIONS) != 0 and session_id not in DESIRED_SESSIONS:
+                    del visual_data[session_id][group_name][participant_id]
+                    del audio_data[session_id][group_name][participant_id]
+                    del engagement_data[session_id][group_name][participant_id]
                 else:
-                    sdas[f"{session_id}"][group_name][f"{participant_id}"]= {}
+                    agreement_dict[f"{session_id}"][group_name][f"{participant_id}"]= {}
                     try: 
-                        sdas[f"{session_id}"][group_name][f"{participant_id}"]["Visual_SDA"] = np.round(sda(list(visual_data[session_id][group_name][participant_id].values())[0], green_gt_trace), 4)   
+                        agreement_dict[f"{session_id}"][group_name][f"{participant_id}"]["Visual_SDA"] = np.round(distance_function(list(visual_data[session_id][group_name][participant_id].values())[0], green_gt_trace), 4)   
                     except TypeError:
-                        sdas[f"{session_id}"][group_name][f"{participant_id}"]["Visual_SDA"] = 0
+                        agreement_dict[f"{session_id}"][group_name][f"{participant_id}"]["Visual_SDA"] = 0
                     try:
-                        sdas[f"{session_id}"][group_name][f"{participant_id}"]["Audio_SDA"] = np.round(sda(list(audio_data[session_id][group_name][participant_id].values())[0], pitch_gt_trace), 4)
+                        agreement_dict[f"{session_id}"][group_name][f"{participant_id}"]["Audio_SDA"] = np.round(distance_function(list(audio_data[session_id][group_name][participant_id].values())[0], pitch_gt_trace), 4)
                     except TypeError:
-                        sdas[f"{session_id}"][group_name][f"{participant_id}"]["Audio_SDA"] = 0
+                        agreement_dict[f"{session_id}"][group_name][f"{participant_id}"]["Audio_SDA"] = 0
 
+    # Example for one distance matrix
+
+    # plot_engagement_data(engagement_data, None)
+    all_distance_matrices = create_distance_matrix(engagement_data, distance_function)
+    plot_minimum_distance_histogram(all_distance_matrices)
+    plot_highlighted_engagement_data(engagement_data, all_distance_matrices)
+
+    # plot_distance_matrices(all_distance_matrices)
+
+    """for session_id, participants in engagement_data.items(): 
+        for group_name, group_data in participants.items():
+            for participant_id, participant_data in group_data.items():
+                for game_id, game_data in participant_data.items():
+
+                    # Retrieve the distance matrix for the current game
+                    distance_matrix = all_distance_matrices[session_id][group_name][game_id]
+
+                    # Perform hierarchical clustering
+                    linked = linkage(squareform(distance_matrix), 'single')
+
+                    # Determine the clusters
+                    max_d = 6  # Example threshold value, adjust based on your data
+                    clusters = fcluster(linked, max_d, criterion='distance')
+
+                    # Plotting the dendrogram with clusters
+                    plt.figure(figsize=(10, 7))
+                    dendrogram(linked, 
+                            orientation='top', 
+                            distance_sort='descending', 
+                            show_leaf_counts=True,
+                            color_threshold=0)  # Color threshold for cluster visualization
+                    plt.title(f'{session_id}-{game_id} Dendrogram')
+                    plt.show()"""
+
+    for session_id, participants in engagement_data.items(): 
+        for group_name, group_data in participants.items():
+            for participant_id, participant_data in group_data.items():
+                agreement_dict[f"{session_id}"][group_name][participant_id]['Engagement'] = {}
+                lengths = []
+                ranges = []
+                for game_id, game_data in participant_data.items():
+                    dtws = []
+                    lengths.append(count_changes(game_data))
+                    ranges.append(np.max(game_data) - np.min(game_data))
+                    for other_id in group_data.keys():
+                        dtws.append(distance_function(game_data, engagement_data[session_id][group_name][other_id][game_id]))
+                    agreement_dict[f"{session_id}"][group_name][f"{participant_id}"]["Engagement"][game_id] = np.mean(dtws)
+                agreement_dict[f"{session_id}"][group_name][participant_id]['Lengths'] = np.ceil(np.mean(lengths))
+                agreement_dict[f"{session_id}"][group_name][participant_id]['Ranges'] = np.ceil(np.mean(ranges))
+
+    """
     for session_id, participants in engagement_data.items(): 
         for group_name, group_data in participants.items():
             for participant_id, participant_data in group_data.items():
@@ -127,7 +145,7 @@ if __name__ == "__main__":
                     if game_id in median_data[session_id][group_name][participant_id]:
                         median_trace = median_data[session_id][group_name][participant_id][game_id]
                         try:
-                            sdas[f"{session_id}"][group_name][f"{participant_id}"]["Engagement"][game_id] = sda(game_data, median_trace)
+                            sdas[f"{session_id}"][group_name][f"{participant_id}"]["Engagement"][game_id] = distance_function(game_data, median_trace)
                             lengths.append(count_changes(game_data))
                             ranges.append(np.max(game_data) - np.min(game_data))
                         except TypeError:
@@ -135,53 +153,27 @@ if __name__ == "__main__":
                             lengths.append(0)
                             ranges.append(0)
 
-                print(lengths)
                 sdas[f"{session_id}"][group_name][participant_id]['Lengths'] = np.ceil(np.mean(lengths))
                 sdas[f"{session_id}"][group_name][participant_id]['Ranges'] = np.ceil(np.mean(ranges))
-
+    """
 
     visual_sdas, audio_sdas, engagement_sdas = [], [], []
-    lengths = []
-    ranges = []
-    
-    for session_id, session_data in sdas.items():
+    for session_id, session_data in agreement_dict.items():
         for group_name, group_data in session_data.items():
-            print(f"\nSESSION:{session_id}")
+            lengths = []
+            ranges = []
+            session_sdas = []
             for participant_id, participant_data in group_data.items():
                 sda_list = list(participant_data['Engagement'].values())
-                mean_sda, ci_sda = compute_confidence_interval(sda_list)
-                print(f"{participant_id}: {np.round(participant_data['Visual_SDA'], 4)},{np.round(participant_data['Audio_SDA'], 4)},{mean_sda}±{ci_sda}")
+                mean_sda, _ = compute_confidence_interval(sda_list)
                 visual_sdas.append(np.round(participant_data['Visual_SDA'], 4))
                 audio_sdas.append(np.round(participant_data['Audio_SDA'], 4))
                 engagement_sdas.append(mean_sda)
+                session_sdas.append(mean_sda)
                 lengths.append(participant_data['Lengths'])
                 ranges.append(participant_data['Ranges'])
 
-    plt.figure()
-
-    # Creating the scatter plot
-    plt.scatter(lengths, engagement_sdas)
-
-    # Adding titles and labels
-    plt.xlabel('Number of Changes in Trace')
-    plt.ylabel('SDA')
-
-
-    plt.figure()
-
-    # Creating the scatter plot
-    plt.scatter(ranges, engagement_sdas)
-
-    # Adding titles and labels
-    plt.xlabel('Range of the Trace (Maximum vs Minimum)')
-    plt.ylabel('SDA')
-
-
-    # Displaying the plot
-    plt.show()
-
     deleted = 0
-
     for i in range(len(visual_sdas)):
         if visual_sdas[i - deleted] == 0 or audio_sdas[i - deleted] == 0:
             del visual_sdas[i - deleted]
@@ -189,12 +181,13 @@ if __name__ == "__main__":
             del engagement_sdas[i - deleted]
             deleted += 1
                 
-
     correlation_visual = pearsonr(visual_sdas, engagement_sdas)
     correlation_audio = pearsonr(audio_sdas, engagement_sdas)
-
-    visual_correlations = compute_correlations(sdas, "Visual_SDA")
-    audio_correlations = compute_correlations(sdas, "Audio_SDA")
+    visual_correlations = compute_correlations(agreement_dict, "Visual_SDA")
+    audio_correlations = compute_correlations(agreement_dict, "Audio_SDA")
     
-    plot_correlations(audio_correlations, visual_correlations, True, "")
-    plot_sda_scatter_grouped(sdas)
+    # game_dtw_scatter(agreement_dict)
+    # plot_correlations(audio_correlations, visual_correlations, True, "")
+    # plot_sda_scatter_grouped(agreement_dict)
+
+execute(3000, ['Session-1', 'Session-2', 'Session-3', 'Session-7'], dtw_distance)
