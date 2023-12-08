@@ -37,6 +37,6 @@ def sample_frames(file_path, window: int = 1,  offset: int = 1, frames_to_sample
     all_frames = np.array(list(container.decode(video=0)))
     container.close()
 
-    all_indices = _create_windows(np.arange(all_frames), window * fps, offset * fps, frames_to_sample)
+    all_indices = _create_windows(np.arange(len(all_frames)), window * fps, offset * fps, frames_to_sample)
     all_frames = all_frames[all_indices]
     return np.stack([np.stack([x.to_ndarray(format="rgb24") for x in frames]) for frames in all_frames])

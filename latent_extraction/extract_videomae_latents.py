@@ -14,6 +14,8 @@ MEAN_POOL = True
 SKIP = False
 # Sampling window in seconds
 WINDOW = 1
+OFFSET = 1
+SESSIONS = ['1', '2', '3', '7']
 
 SAVE_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
@@ -21,9 +23,11 @@ if __name__ == "__main__":
     # Takes about 30 seconds per video on GPU, and 2.5 minutes per video on CPU
     for in_subdirectory_path in ROOT_DIRECTORY.glob("*"):
         in_subdirectory_name = in_subdirectory_path.name
+        if in_subdirectory_name not in SESSIONS:
+            continue
         out_subdirectory_path = SAVE_DIRECTORY / in_subdirectory_name
         out_subdirectory_path.mkdir(parents=True, exist_ok=True)
         print(f"Generating latents for session {in_subdirectory_name}:")
         for in_file_path in in_subdirectory_path.glob("*.mp4"):
             extract_latents(str(in_file_path), out_subdirectory_path, window=WINDOW, mean_pool=MEAN_POOL,
-                            skip_existing=SKIP)
+                            skip_existing=SKIP, offset=OFFSET)

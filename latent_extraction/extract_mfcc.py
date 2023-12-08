@@ -40,6 +40,8 @@ def extract_latents(in_file_path, out_file_dir, window, offset):
 if __name__ == '__main__':
     for in_subdirectory_path in ROOT_DIRECTORY.glob("*"):
         in_subdirectory_name = in_subdirectory_path.name
+        if in_subdirectory_name not in SESSIONS:
+            continue
         out_subdirectory_path = SAVE_DIRECTORY / in_subdirectory_name
         out_subdirectory_path.mkdir(parents=True, exist_ok=True)
         print(f"Generating latents for session {in_subdirectory_name}:")
