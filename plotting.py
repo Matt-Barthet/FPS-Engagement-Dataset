@@ -5,7 +5,96 @@ import matplotlib
 from matplotlib.colors import ListedColormap
 import seaborn as sns
 import math
-time_windows = 250
+time_windows = 1000
+
+from matplotlib.cm import coolwarm
+from matplotlib.colors import LinearSegmentedColormap
+
+def plot_colored_engagement_data(data_dict, distance_matrices, groups=['Expert']):
+    all_game_names = sorted(set(game_name for session_data in data_dict.values() for group_data in session_data.values() for participant_data in group_data.values()
+                                for game_name in participant_data.keys()))
+    game_to_index = {game_name: index for index, game_name in enumerate(all_game_names)}
+
+    for session_id, session_data in distance_matrices.items():
+        print(session_id)
+        min_distances = []
+        for _, games in session_data.items():
+            for game_id, matrix in games.items():
+                for participant_id in range(len(matrix)):
+                    distances = matrix[participant_id, :]
+                    non_zero_distances = distances[np.nonzero(distances)]
+                    if non_zero_distances.size > 0:
+                        min_distances.append(np.min(non_zero_distances))
+
+        # Create a dictionary to store normalized distances for this session
+        normalized_distances_dict = {}
+        distances_dict = {}
+
+        normalized_list = []
+        for _, games in session_data.items():
+            for game_id, matrix in games.items():
+                for participant_id in range(len(matrix)):
+                    distances = matrix[participant_id, :]
+                    non_zero_distances = distances[np.nonzero(distances)]
+                    if non_zero_distances.size > 0:
+                        min_distance_of_participant = np.min(non_zero_distances)
+                        normalized_distance = (min_distance_of_participant - np.min(min_distances)) / (np.max(min_distances) - np.min(min_distances))
+                        normalized_distances_dict[(game_id, participant_id)] = normalized_distance
+                        distances_dict[(game_id, participant_id)] = min_distance_of_participant
+                        normalized_list.append(normalized_distance)
+
+        mean_val = np.nanmean(normalized_list)
+        std_dev = np.nanstd(normalized_list)
+        distance_threshold = mean_val + 2 * std_dev
+
+        # Create a custom segmented colormap
+        cdict = {'red':   [(0.0, 0.0, 0.0),
+                        (distance_threshold, 1.0, 1.0),
+                        (1.0, 1.0, 1.0)],
+
+                'green': [(0.0, 0.0, 0.0),
+                        (distance_threshold, 0.0, 0.0),
+                        (1.0, 0.0, 0.0)],
+
+                'blue':  [(0.0, 1.0, 1.0),
+                        (distance_threshold, 0.0, 0.0),
+                        (1.0, 0.0, 0.0)]}
+
+        custom_colormap = LinearSegmentedColormap('CustomMap', cdict)
+
+        for group_id, group_data in data_dict[session_id].items():
+            if group_id not in groups:
+                continue
+            
+            fig, axes = plt.subplots(5, 6, figsize=(14, 12), constrained_layout=True)
+            fig.suptitle(f"Highlighted Engagement Data for {session_id}", fontsize=16)
+            axes = axes.flatten()
+            for ids, (participant_id, participant_data) in enumerate(group_data.items()):
+                for game_name, game_values in participant_data.items():
+                    try:
+                        ax = axes[game_to_index[game_name]]
+                        time_values = np.arange(0, len(game_values))
+                        # Ensure that the color is correctly selected from the colormap
+                        normalized_distance = normalized_distances_dict.get((game_name, ids), 0)
+                        color = custom_colormap(normalized_distance)
+                        ax.plot(time_values, game_values, label=participant_id, color=color)
+                    except TypeError:
+                        pass
+                    except ValueError:
+                        pass
+
+            sm = plt.cm.ScalarMappable(cmap=custom_colormap, norm=plt.Normalize(0, 1))
+            sm.set_array([])
+            cbar = fig.colorbar(sm, ax=axes, orientation='horizontal', fraction=0.046, pad=0.04)
+            cbar.set_label('Normalized DTW Distance')
+            cbar.ax.axvline(distance_threshold, color='black', linewidth=4, label='Threshold')
+            cbar.ax.legend(bbox_to_anchor=(1.2,0.5), loc='center right')
+
+            try:
+                plt.savefig(f"./Data Analysis/Figures/{session_id}-{group_id}_highlighted.png")
+            except ValueError:
+                pass
+            plt.close()
 
 def plot_brightness_and_pitch_data(session, session_ids, group, title, gt_signal, sound=False,start=0):
 
@@ -51,7 +140,6 @@ def plot_game_traces(traces, median, start=0):
     plt.plot(median[:60], color ="black", lw=2, marker='o', markevery=4, label='GT')
     for trace in range(len(traces)):
         plt.plot(traces[trace][:60], alpha=0.75, label=labels[trace], color=colors[trace+start % 10])
-    # plt.xticks([0, 60, 120, 180, 240], [0, 15, 30, 45, 60])
     plt.xlim(xmin=-1, xmax=61)
     plt.legend(bbox_to_anchor=(1.2,0.78), loc='upper right')
     plt.subplots_adjust(right=0.846)
@@ -67,7 +155,6 @@ def plot_highlighted_engagement_data(data_dict, distance_matrices, groups=['Expe
     game_to_index = {game_name: index for index, game_name in enumerate(all_game_names)}
 
     for session_id, session_data in distance_matrices.items():
-        # Calculate the threshold for each session
         min_distances = []
         for _, games in session_data.items():
             for _, matrix in games.items():
@@ -77,8 +164,8 @@ def plot_highlighted_engagement_data(data_dict, distance_matrices, groups=['Expe
                     if non_zero_distances.size > 0:
                         min_distances.append(np.min(non_zero_distances))
 
-        mean_val = np.mean(min_distances)
-        std_dev = np.std(min_distances)
+        mean_val = np.nanmean(min_distances)
+        std_dev = np.nanstd(min_distances)
         distance_threshold = mean_val + 2 * std_dev
 
         min_distances_dict = {}
@@ -189,13 +276,12 @@ def plot_minimum_distance_histogram(distance_matrices, bins=30, xlabel='DTW Dist
                     if non_zero_distances.size > 0:
                         min_distances.append(np.min(non_zero_distances))
 
-        print(session_id, len(min_distances))
         plt.figure(figsize=(8, 6))
         plt.hist(min_distances, bins=bins, color='blue', edgecolor='black')
 
         # Calculate mean and standard deviation
-        mean_val = np.mean(min_distances)
-        std_dev = np.std(min_distances)
+        mean_val = np.nanmean(min_distances)
+        std_dev = np.nanstd(min_distances)
         
         # Plot mean, and 1 and 2 standard deviations from the mean
         plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=1, label='Mean')
@@ -206,8 +292,8 @@ def plot_minimum_distance_histogram(distance_matrices, bins=30, xlabel='DTW Dist
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
         plt.legend()
-        plt.savefig(f"./Data Analysis/Figures/DTW_Hist_Minimums_{session_id}.png")
-        plt.close()
+        # plt.savefig(f"./Data Analysis/Figures/DTW_Hist_Minimums_{session_id}.png")
+        plt.show()
 
 
 def plot_distance_matrices(distance_matrices, output_dir='./Data Analysis/Figures', rows_per_figure=4):
@@ -257,8 +343,6 @@ def plot_distance_matrices(distance_matrices, output_dir='./Data Analysis/Figure
             plt.close()
 
 
-
-
 def game_dtw_scatter(data_dict):
     all_game_names = sorted(set(game_name for session_data in data_dict.values() for group_data in session_data.values() for participant_data in group_data.values()
                                 for game_name in participant_data['Engagement'].keys()))
@@ -280,7 +364,6 @@ def game_dtw_scatter(data_dict):
                         ax.set_xlim([0, 7])
                         ax.set_ylim([0, 40])
                         # ax.legend()
-
                     except TypeError:
                         pass
             plt.savefig(f"./Figures/{session_id}-{group_id}.png")
@@ -337,12 +420,7 @@ def plot_sda_scatter_grouped(sda_scores):
     plt.errorbar(qa_experts, engagement_experts, label="Experts", fmt="o", yerr=experts_ci, markeredgecolor="black")
     plt.ylabel('Mean DTW (Engagement Tasks)')
     plt.xlabel('Mean DTW (QA Tasks)')
-    # plt.title('SDA Scatter (Visual Task)')
-    # plt.xlim([-1, 1])
-    # plt.ylim([-1, 1])
     plt.legend(loc="upper center", ncols=2, bbox_to_anchor=(0.5, 1.15))
-    # plt.hlines(y=0, xmin=-1, xmax=1, color="black")
-    # plt.vlines(x=0, ymin=-1, ymax=1, color="black")
     plt.show()
 
 def plot_correlations(audio_correlations, visual_correlations, sort=True, title=""):

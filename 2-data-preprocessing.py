@@ -2,40 +2,17 @@ import numpy as np
 from utility_functions import *
 import pandas as pd
 
+"""
+Basic signal processing script. Takes the CSV files outputted by the data loader and builds a dictionary of all the data, split by session, group, participant and game.
+Bad participants (i.e. those that have not completed all three tasks) are removed from the dictionary.
+This script also interpolates the data to a fixed time window size (1 second by default) and smoothes the data using a moving average filter (1 sample by default).
+Finally, the traces can be normalized using min-max normalization on a trace-by-trace basis (enabled by default).
+Note: The annotator ID's for the expert annotators are also hardcoded below, these are used to separate them from the crowdworkers who annotated in the same session.
+This script outputs three dictionaries containing the processed signals as numpy file, one for each annotation type (visual, audio, engagement).
+"""
 idg_annotators_session1 = ["BD7CE04E-99E3-7FA4-A15B-5625CD981638", "F868E6ED-CA85-FD16-942C-BE70BB997450", "1D8DFC94-778B-0969-9390-9F8A5B9C33EE", "89DA2498-EB31-04AF-2921-AEA70D626881", "49CAE400-6726-5DE5-398E-179FAD35B00A"]
 idg_annotators_session2 = ['2EEEFB7F-9312-F08D-97CA-28A3B631D29E', "3865D7ED-91D3-6EF6-DB13-DD7C46D9034E", "BA3206C6-52F9-5900-5A81-2188D3E88B59", "ED4B536F-21B5-262C-61BC-A4396AFC016B", "62FF5C7F-4E6B-BB00-3FE0-F8752641A074"]
 idg_annotators_session3 = ['5B89C3FA-A4AB-D90C-3FEF-885016FFB732', '738D09B9-A39F-819B-A237-C09448A2EB62', '9B3BB3E4-2AEB-482E-7316-F9715621C362', 'AE85275E-9C4D-D381-25F3-D823E24C0EF8', "F64F50A5-9F45-9753-0C9E-12AD4E483081"]
-
-
-def avgfilter(signal, N):
-  
-  if signal.shape == ():
-      return signal
-  
-  # Initialize the output array with NaN values
-  output = np.empty_like(signal, dtype=np.float64)
-  
-  # Apply a moving average filter to each window of size k in the signal
-  for k in range(1, N + 1):
-      output[k - 1] = np.mean(signal[:k])
-  for i in range(N, len(signal)):
-      output[i] = np.mean(signal[i - N:i])
-  return output
-
-
-def get_max_times(participants):
-    game_max_times = {}
-    for _, participant_df in participants:
-        games = participant_df.groupby('DatabaseName')
-        for _, game_df in games:
-            try:
-                clean_game_name = game_df['OriginalName'].values[0].split("_")[1].split(".")[0]
-            except:
-                print(game_df['OriginalName'].values[0])
-            if clean_game_name not in game_max_times or game_df["VideoTime"].max() > game_max_times[clean_game_name]:
-                game_max_times[clean_game_name] = game_df["VideoTime"].max()
-    return game_max_times
-
 
 def build_session_dict(df, engagement=False):
     pagan_sessions = df.groupby("PaganSession")
@@ -47,19 +24,15 @@ def build_session_dict(df, engagement=False):
         for participant_id, participant_df in participants:
             groups = participant_df.groupby("Group")
             for group, group_df in groups:
-
-                # Filter our non-expert participants when there are both crowdworkers and experts in the same session.
                 if group == "Expert" and session_name == "Session-1" and participant_id not in idg_annotators_session1:
                     continue
                 elif group == "Expert" and session_name == "Session-2" and participant_id not in idg_annotators_session2:
                     continue
                 elif group == "Expert" and session_name == "Session-3" and participant_id not in idg_annotators_session3:
                     continue
-
                 games = group_df.groupby('DatabaseName')
                 data_dict[session_name][group][participant_id] = {}
                 game_counter = 0
-                
                 for _, game_df in games:
                     clean_game_name = game_df['OriginalName'].values[0].split("_")[1].split(".")[0]           
                     data_dict[session_name][group][participant_id][clean_game_name] = {
@@ -71,7 +44,7 @@ def build_session_dict(df, engagement=False):
                         data_dict[session_name][group][participant_id][clean_game_name]["VideoTime"] = np.append(game_df["VideoTime"].values, game_max_times[clean_game_name])
                         data_dict[session_name][group][participant_id][clean_game_name]["Value"] = np.append(game_df["Value"].values, 0)   
                     game_counter += 1
-                if game_counter < 30 and engagement:
+                if game_counter < 15 and engagement:
                     del data_dict[session_name][group][participant_id]
     return data_dict
 
@@ -97,17 +70,15 @@ def interpolate_data(data_dict, tw_size, MIN_CHANGES):
                         invalid += 1
                         interpolated_dict[session_id][group_name][participant_id][game_name] = None
                     else:
-                        interpolated_dict[session_id][group_name][participant_id][game_name] = pagan_fulltrace(df, tw_size)
+                        interpolated_dict[session_id][group_name][participant_id][game_name] = interpolate_trace(df, tw_size)
     # print(f"Number of traces interpolated: {counter}")
     # print(f"Number of invalid traces: {invalid}")
     return interpolated_dict
 
 
-def pagan_fulltrace(pagan_trace, tw_size, time_col = 'VideoTime'):
-
+def interpolate_trace(pagan_trace, tw_size, time_col = 'VideoTime'):
     if len (pagan_trace) == 1:
         return None
-    
     pagan_trace.loc[pagan_trace.index[-1], 'Value'] = pagan_trace.loc[pagan_trace.index[-2], 'Value']
     df = pagan_trace.copy(deep=True)
     df.loc[:, '[control]time_index'] = pd.to_timedelta((df[time_col]).astype('int32'), 'ms')
@@ -115,11 +86,9 @@ def pagan_fulltrace(pagan_trace, tw_size, time_col = 'VideoTime'):
     annotation = df.copy(deep=True)
     annotation = annotation.resample('{}ms'.format(tw_size)).mean(numeric_only=True)
     annotation = annotation.ffill(axis=0)
-
     removed_trailing = annotation['Value'].values[:-1]
     if removed_trailing[-1] == 0:
         removed_trailing = annotation['Value'].values[:-2]
-
     return removed_trailing
 
 def normalize_data(data_dict, MA_SIZE):
@@ -134,11 +103,9 @@ def normalize_data(data_dict, MA_SIZE):
                     if np.min(values) != np.max(values):
                         normalized_values = (values - np.min(values)) / (np.max(values) - np.min(values))
                     else:
-                        normalized_values = values
-
+                        normalized_values = np.zeros_like(values)
                     if MA_SIZE > 1:
                         normalized_values = avgfilter(normalized_values, MA_SIZE)
-
                     normalized_dict[session_id][group_id][participant_id][game_name] = normalized_values.tolist()
     return normalized_dict
 
@@ -181,7 +148,18 @@ def remove_bad_sessions(visual_data, audio_data, engagement_data, sessions=[]):
     return visual_data, audio_data, engagement_data
 
 
-def execute(NORMALIZE, TW_SIZE, MIN_CHANGES, MA_SIZE):
+def add_missing_games(engagement_data):
+    all_games = sorted(set(game_name for session_data in engagement_data.values() for participant_data in session_data.values() for group_data in participant_data.values() for game_name in group_data.keys()))
+    for session_id, groups in engagement_data.items():
+        for group_id, participants in groups.items():
+            for participant_id, games in participants.items():
+                for game in all_games:
+                    if game not in games:
+                        engagement_data[session_id][group_id][participant_id][game] = None
+    return engagement_data    
+
+
+def execute(NORMALIZE, TW_SIZE, MIN_CHANGES, MA_SIZE, SESSIONS):
 
     engagement_df = pd.read_csv("./Processed Data/Raw_Engagement_Logs.csv")
     green_brightness_df = pd.read_csv("./Processed Data/Raw_Visual_Logs.csv")
@@ -200,10 +178,9 @@ def execute(NORMALIZE, TW_SIZE, MIN_CHANGES, MA_SIZE):
         audio_data = normalize_data(audio_data, MA_SIZE)
         engagement_data = normalize_data(engagement_data, MA_SIZE)
 
-    sessions = ['Session-1', 'Session-2', 'Session-3', 'Session-7']
+    visual_data, audio_data, engagement_data = remove_bad_sessions(visual_data, audio_data, engagement_data, SESSIONS)
+    engagement_data = add_missing_games(engagement_data)
 
-    visual_data, audio_data, engagement_data = remove_bad_sessions(visual_data, audio_data, engagement_data, sessions)
-    
     np.save("./Processed Data/Session_Dict(Audio_Task).npy", audio_data)
     np.save("./Processed Data/Session_Dict(Visual_Task).npy", visual_data)
     np.save("./Processed Data/Session_Dict(Engagement_Task).npy", engagement_data)

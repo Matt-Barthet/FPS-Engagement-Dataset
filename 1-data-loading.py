@@ -2,6 +2,11 @@ import pandas as pd
 import os
 import numpy as np
 
+"""
+Data loading script for Pagan data. This takes the individual CSV files outputted by Pagan and combines them into a single CSV file for each annotation type (visual, audio, engagement).
+Has the option to filter out duplicate sessions (i.e. if the same participant ID annotated the task multiple times, only the latest session is kept).
+At this point the raw traces only contain changes in the annotation, not the time-windowed annotation values. This is done in the next step (2-data-preprocessing.py).
+"""
 
 def latest_session(participant_data):
     all_sessions = participant_data['SessionID'].unique()
@@ -12,7 +17,7 @@ def latest_session(participant_data):
     return all_sessions[np.argmax(timesteps)]
 
 
-def filter_duplicate_sessions(df, multipleGames=False):
+def filter_duplicate_sessions(df, engagementSession=False):
     sessions = df['PaganSession'].unique()
     latest_sessions_df = pd.DataFrame()  
     for session in sessions:
@@ -20,8 +25,7 @@ def filter_duplicate_sessions(df, multipleGames=False):
         participants = session_df['Participant'].unique()
         for participant in participants:
             participant_df = session_df[session_df['Participant'] == participant]
-
-            if multipleGames: # if engagement vs qa tests
+            if engagementSession:
                 games = participant_df['DatabaseName'].unique()
                 for game in games:
                     game_df = participant_df[participant_df['DatabaseName'] == game]

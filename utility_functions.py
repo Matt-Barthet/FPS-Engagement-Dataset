@@ -5,7 +5,29 @@ from sklearn.metrics import cohen_kappa_score
 from krippendorff import alpha
 from dtw import dtw
 import numpy as np
-import matplotlib.pyplot as plt
+
+
+def avgfilter(signal, N):
+    if signal.shape == ():
+        return signal
+    output = np.empty_like(signal, dtype=np.float64)
+    for k in range(1, N + 1):
+        output[k - 1] = np.mean(signal[:k])
+    for i in range(N, len(signal)):
+        output[i] = np.mean(signal[i - N:i])
+    return output
+
+
+def get_max_times(participants):
+    game_max_times = {}
+    for _, participant_df in participants:
+        games = participant_df.groupby('DatabaseName')
+        for _, game_df in games:
+            clean_game_name = game_df['OriginalName'].values[0].split("_")[1].split(".")[0]
+            if clean_game_name not in game_max_times or game_df["VideoTime"].max() > game_max_times[clean_game_name]:
+                game_max_times[clean_game_name] = game_df["VideoTime"].max()
+    return game_max_times
+
 
 def dtw_distance(signal1, signal2):
   return dtw(signal1, signal2).distance
@@ -28,7 +50,6 @@ def count_changes(arr):
     arr = np.asarray(arr)
     if len(arr) < 2:
         return 0
-    
     change_count = 0
     for i in range(len(arr) - 1):
         if arr[i] != arr[i + 1]:
