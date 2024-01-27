@@ -220,6 +220,8 @@ def output_filtered_data(engagement_data, distance_dict, distance_matrices):
 
 def execute(time_windows, DESIRED_SESSIONS, distance_function):
 
+    plt.rcParams['font.size'] = 16
+
     engagement_data = np.load("./Processed Data/Session_Dict(Engagement_Task).npy", allow_pickle=True).item()
     visual_data = np.load("./Processed Data/Session_Dict(Visual_Task).npy", allow_pickle=True).item()
     audio_data = np.load("./Processed Data/Session_Dict(Audio_Task).npy", allow_pickle=True).item()
@@ -235,7 +237,9 @@ def execute(time_windows, DESIRED_SESSIONS, distance_function):
     # plot_highlighted_engagement_data(engagement_data, all_distance_matrices)
 
     std1_filtered, std2_filtered = output_filtered_data(engagement_data, min_distance_dict, all_distance_matrices)
-    plot_engagement_data(std1_filtered, None)
+    plot_filtered_traces(engagement_data, std1_filtered, std2_filtered)
+    exit()
+    # plot_engagement_data(std1_filtered, None)
     # plot_distance_matrices(all_distance_matrices)
 
     visual_sdas, audio_sdas, engagement_sdas = [], [], []

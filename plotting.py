@@ -277,23 +277,24 @@ def plot_minimum_distance_histogram(distance_matrices, bins=30, xlabel='DTW Dist
                         min_distances.append(np.min(non_zero_distances))
 
         plt.figure(figsize=(8, 6))
-        plt.hist(min_distances, bins=bins, color='blue', edgecolor='black')
+        plt.hist(min_distances, bins=bins, color='#9C0C35', edgecolor='black')
 
         # Calculate mean and standard deviation
         mean_val = np.nanmean(min_distances)
         std_dev = np.nanstd(min_distances)
         
         # Plot mean, and 1 and 2 standard deviations from the mean
-        plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=1, label='Mean')
-        plt.axvline(mean_val + std_dev, color='green', linestyle='dashed', linewidth=1, label='Mean + 1 SD')
-        plt.axvline(mean_val + 2 * std_dev, color='purple', linestyle='dashed', linewidth=1, label='Mean + 2 SD')
+        plt.axvline(mean_val, color='blue', linestyle='solid', linewidth=4, label='Mean')
+        plt.axvline(mean_val + std_dev, color='green', linestyle='dashed', linewidth=4, label='Mean + 1 SD')
+        plt.axvline(mean_val + 2 * std_dev, color='purple', linestyle='dashdot', linewidth=4, label='Mean + 2 SD')
 
-        plt.title(f'Minimum DTW Histogram for {session_id}-Experts')
+        # plt.title(f'Minimum DTW Histogram for {session_id}-Experts')
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
-        plt.legend()
-        # plt.savefig(f"./Data Analysis/Figures/DTW_Hist_Minimums_{session_id}.png")
-        plt.show()
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15), ncol=3)
+        plt.tight_layout()
+        plt.savefig(f"./Data Analysis/Figures/DTW_Hist_Minimums_{session_id}.png")
+        # plt.show()
 
 
 def plot_distance_matrices(distance_matrices, output_dir='./Data Analysis/Figures', rows_per_figure=4):
@@ -508,6 +509,84 @@ def plot_trace(trace1, trace2, sda):
     plt.ylabel("Value")
     plt.show()
 
+from matplotlib.cm import get_cmap
+
+def plot_filtered_traces(original, std1, std2):
+
+    traces = original['Session-1']['Expert']
+    std1_traces = std1['Session-1']['Expert']
+    std2_traces = std2['Session-1']['Expert']
+
+    fig, axes = plt.subplots(1, 3, constrained_layout=False, figsize=(16, 5))
+    axes = axes.flatten()
+
+    participant_mapping = {}    
+    name_mapping = {}
+    num_participants = len(traces)  # Number of participants
+    cmap = get_cmap('viridis', 5)  # Getting the Viridis colormap for the number of participants
+    colors = [cmap(i) for i in range(num_participants)]  # Generating colors for each participant
+    markers = ['o', 'v', 's', '^', 'x']
+    counter = 0
+    for paricipant in traces.keys():
+        participant_mapping[paricipant] = counter
+        name_mapping[paricipant] = f"P{counter+1}"
+        counter += 1
+        trace = traces[paricipant]['wolf3d']
+        time_values = np.arange(0, len(trace))
+        ax = axes[0]
+        ax.plot(time_values, trace, label=name_mapping[paricipant], color=colors[participant_mapping[paricipant]], marker=markers[participant_mapping[paricipant]], markevery=5, markeredgecolor='black', linewidth=2)
+        ax.set_title("Original Traces")
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel("Value")
+    for paricipant in std2_traces.keys():
+        try:
+            trace = std2_traces[paricipant]['wolf3d']
+            time_values = np.arange(0, len(trace))
+            ax = axes[1]
+            ax.plot(time_values, trace, label=name_mapping[paricipant], color=colors[participant_mapping[paricipant]], marker=markers[participant_mapping[paricipant]], markevery=5, markeredgecolor='black', linewidth=2)
+            ax.set_title("2 St.Dev Filter")
+            ax.set_xlabel("Time (s)")
+        except KeyError:
+            continue
+
+    for paricipant in std1_traces.keys():
+        try:
+            trace = std1_traces[paricipant]['wolf3d']
+            time_values = np.arange(0, len(trace))
+            ax = axes[2]
+            ax.set_title("1 St.Dev Filter")
+            ax.set_xlabel("Time (s)")
+            ax.plot(time_values, trace, label=name_mapping[paricipant], color=colors[participant_mapping[paricipant]], marker=markers[participant_mapping[paricipant]], markevery=5, markeredgecolor='black', linewidth=2)
+        except KeyError:
+            continue
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.8)
+    fig.legend(loc="upper center", ncol=5, labels=['P1', 'P2', 'P3', 'P4', 'P5'], bbox_to_anchor=(0.5, 1.015))
+    plt.show()
+    return
+
+    for session_id, session_data in data_dict.items():
+        for group_id, group_data in session_data.items():
+            fig, axes = plt.subplots(5, 6, figsize=(14, 10), constrained_layout=True)
+            fig.suptitle(f"Resampled Engagement Data for Session {session_id}", fontsize=16)
+            axes = axes.flatten()
+            for participant_id, participant_data in group_data.items():
+                for game_name, game_values in participant_data.items():
+                    try:
+                        ax = axes[game_to_index[game_name]]
+                        time_values = np.arange(0, len(game_values))
+                        ax.plot(time_values, game_values, label=participant_id)
+                        if median_signals_dict is not None and game_name in median_signals_dict[session_id][group_id]:
+                            median_signal = median_signals_dict[session_id][group_id][game_name]
+                            median_time_values = np.arange(0, len(median_signal))
+                            ax.plot(median_time_values, median_signal, color='black', linewidth=2)   
+                        ax.set_title(game_name)
+                        # ax.legend()
+
+                    except TypeError:
+                        pass
+            plt.savefig(f"./Data Analysis/Figures/{session_id}-{group_id}.png")
+            plt.close()
 
 def execute():
     font = {'size': 14}
