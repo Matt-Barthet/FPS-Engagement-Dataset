@@ -10,19 +10,23 @@ from itertools import combinations
 def compute_correlations(sda_scores, label):
     correlations = {}
     for session_id, session_data in sda_scores.items():
-        for _, group_data in session_data.items():
-            game_names = set(game for participant_data in group_data.values() for game in participant_data['Engagement'].keys())
-            for game in game_names:
-                game_sdas = [participant_data['Engagement'].get(game) for participant_data in group_data.values()
-                            if game in participant_data['Engagement']]
-                label_sdas = [participant_data[label] for participant_data in group_data.values()
-                            if game in participant_data['Engagement']]
-                for i in range(len(game_sdas)):
-                    if np.isnan(game_sdas[i]) or np.isnan(label_sdas[i]):
-                        del game_sdas[i]
-                        del label_sdas[i]
-                correlation, _ = pearsonr(game_sdas, label_sdas)
-                correlations[f"{session_id}-{game}"] = correlation
+        group_data = session_data['Expert']
+        game_names = set(game for participant_data in group_data.values() for game in participant_data['Engagement'].keys())
+        for game in game_names:
+            game_sdas = [participant_data['Engagement'].get(game) for participant_data in group_data.values()
+                        if game in participant_data['Engagement']]
+            print(game_sdas)
+            label_sdas = [participant_data[label] for participant_data in group_data.values()
+                        if game in participant_data['Engagement']]
+            print(len(game_sdas))
+            """for i in range(len(game_sdas)):
+                if np.isnan(game_sdas[i]) or np.isnan(label_sdas[i]):
+                    del game_sdas[i]
+                    del label_sdas[i]"""
+            game_sdas = np.nan_to_num(game_sdas, True, 0)
+            label_sdas = np.nan_to_num(label_sdas, True, 0)
+            correlation, _ = pearsonr(game_sdas, label_sdas)
+            correlations[f"{session_id}-{game}"] = correlation
     return correlations
 
 
@@ -220,51 +224,51 @@ def output_filtered_data(engagement_data, distance_dict, distance_matrices):
 
 def execute(time_windows, DESIRED_SESSIONS, distance_function):
 
-    plt.rcParams['font.size'] = 16
+    plt.rcParams['font.size'] = 10
 
     engagement_data = np.load("./Processed Data/Session_Dict(Engagement_Task).npy", allow_pickle=True).item()
     visual_data = np.load("./Processed Data/Session_Dict(Visual_Task).npy", allow_pickle=True).item()
     audio_data = np.load("./Processed Data/Session_Dict(Audio_Task).npy", allow_pickle=True).item()
     gold_standard_data = np.load("./Processed Data/Engagement_Gold_Standard(Median).npy", allow_pickle=True).item()
+    
     visual_data, audio_data, engagement_data = ignore_unwanted_sessions(visual_data, audio_data, engagement_data, gold_standard_data, DESIRED_SESSIONS)
-
     agreement_dict = build_agreement_dict(visual_data, audio_data, engagement_data, distance_function, tw=time_windows)
 
     # plot_engagement_data(engagement_data, None)
-    all_distance_matrices = create_distance_matrix(engagement_data, distance_function)
-    min_distance_dict = create_distance_dict(engagement_data, distance_function)
+    # all_distance_matrices = create_distance_matrix(engagement_data, distance_function)
+    # min_distance_dict = create_distance_dict(engagement_data, distance_function)
     # plot_minimum_distance_histogram(all_distance_matrices)
     # plot_highlighted_engagement_data(engagement_data, all_distance_matrices)
 
-    std1_filtered, std2_filtered = output_filtered_data(engagement_data, min_distance_dict, all_distance_matrices)
-    plot_filtered_traces(engagement_data, std1_filtered, std2_filtered)
-    exit()
+    # std1_filtered, std2_filtered = output_filtered_data(engagement_data, min_distance_dict, all_distance_matrices)
+    # plot_filtered_traces(engagement_data, std1_filtered, std2_filtered)
     # plot_engagement_data(std1_filtered, None)
     # plot_distance_matrices(all_distance_matrices)
 
     visual_sdas, audio_sdas, engagement_sdas = [], [], []
-    for session_id, session_data in agreement_dict.items():
-        for group_name, group_data in session_data.items():
-            lengths = []
-            ranges = []
-            session_sdas = []
-            for participant_id, participant_data in group_data.items():
-                sda_list = list(participant_data['Engagement'].values())
-                mean_sda, _ = compute_confidence_interval(sda_list)
-                visual_sdas.append(np.round(participant_data['Visual_SDA'], 4))
-                audio_sdas.append(np.round(participant_data['Audio_SDA'], 4))
-                engagement_sdas.append(mean_sda)
-                session_sdas.append(mean_sda)
-                lengths.append(participant_data['Lengths'])
-                ranges.append(participant_data['Ranges'])
+    for _, session_data in agreement_dict.items():
+        group_name='Expert'
+        lengths = []
+        ranges = []
+        session_sdas = []
+        for _, participant_data in session_data[group_name].items():
+            sda_list = list(participant_data['Engagement'].values())
+            mean_sda, _ = compute_confidence_interval(sda_list)
+            visual_sdas.append(np.round(participant_data['Visual_SDA'], 4))
+            audio_sdas.append(np.round(participant_data['Audio_SDA'], 4))
+            engagement_sdas.append(mean_sda)
+            session_sdas.append(mean_sda)
+            lengths.append(participant_data['Lengths'])
+            ranges.append(participant_data['Ranges'])
                 
     # correlation_visual = pearsonr(visual_sdas, engagement_sdas)
     # correlation_audio = pearsonr(audio_sdas, engagement_sdas)
-    # visual_correlations = compute_correlations(agreement_dict, "Visual_SDA")
-    # audio_correlations = compute_correlations(agreement_dict, "Audio_SDA")
+    visual_correlations = compute_correlations(agreement_dict, "Visual_SDA")
+    audio_correlations = compute_correlations(agreement_dict, "Audio_SDA")
     
     # game_dtw_scatter(agreement_dict)
     # plot_correlations(audio_correlations, visual_correlations, True, "")
+    plot_correlations_group(audio_correlations, visual_correlations, True, "")
     # plot_sda_scatter_grouped(agreement_dict)
 
 sessions = ['Session-1', 'Session-2', 'Session-3', 'Session-7'] # + [f'Session-{i}' for i in range(8, 16)]

@@ -11,7 +11,7 @@ if __name__ == "__main__":
     print("\rStep 1/4: Combining raw CSV files into Visual/Audio/Engagement CSVs... done!")
 
     print("\rStep 2/4: Creating session dictionary, interpolating and smoothening signals...", end="")
-    sessions = ['Session-1', 'Session-2', 'Session-3', 'Session-7'] + [f'Session-{i}' for i in range(8, 16)]
+    sessions = ['Session-1', 'Session-2', 'Session-3', 'Session-7']
     time_window_size_ms = 1000 
     normalize_signals = True 
     minimum_changes = 2

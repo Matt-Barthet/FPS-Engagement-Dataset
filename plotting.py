@@ -7,6 +7,8 @@ import seaborn as sns
 import math
 time_windows = 1000
 
+from collections import defaultdict
+
 from matplotlib.cm import coolwarm
 from matplotlib.colors import LinearSegmentedColormap
 
@@ -146,6 +148,64 @@ def plot_game_traces(traces, median, start=0):
     plt.xlabel('Time (s)')
     plt.ylabel('Value')
     plt.tight_layout()
+    plt.show()
+
+
+def plot_correlations_group(audio_correlations, visual_correlations, sort=True, title=""):
+    # Group correlations by game
+    grouped_correlations = defaultdict(lambda: {'audio': [], 'visual': []})
+    for game, corr in audio_correlations.items():
+
+        grouped_correlations[game.split('-')[-1]]['audio'].append(corr)
+        grouped_correlations[game.split('-')[-1]]['visual'].append(visual_correlations[game])
+
+    # Number of games
+    num_games = len(grouped_correlations)
+
+    # Determine grid size for subplots
+    num_cols = 5  # or choose another appropriate number
+    num_rows = math.ceil(num_games / num_cols)
+
+    # Create a figure with subplots
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(13, 10), constrained_layout=True)
+    if num_rows == 1:
+        axes = [axes]  # Make sure axes is always a list
+    if num_cols == 1:
+        axes = [[ax] for ax in axes]  # Make sure axes is always a 2D list
+
+    # Flatten axes array for easy indexing
+    axes_flat = [ax for sublist in axes for ax in sublist]
+
+    offset = 0.4
+
+    # Plot each game's correlations in a separate subplot
+    for i, (game, corrs) in enumerate(grouped_correlations.items()):
+        ax = axes_flat[i]
+        x_range = np.arange(len(corrs['audio']))
+        ax.bar(x_range - offset/2, corrs['audio'], width=offset, label="Audio Correlation")
+        ax.bar(x_range + offset/2, corrs['visual'], width=offset, label="Visual Correlation")
+        ax.set_title(game)
+        ax.set_yticks(np.linspace(-1, 1, 5))
+
+        if i % num_cols == 0:
+            ax.set_ylabel('Correlation')
+        else: 
+            ax.set_yticklabels(['', '', '', '', ''])
+
+        if i > num_cols * (num_rows - 1) - 1:
+            ax.set_xticks(x_range)
+            ax.set_xlabel('Session')
+            ax.set_xticklabels(['S1', 'S2', 'S3', 'S4'])
+        else:
+            ax.set_xticklabels(['', '', '', '', ''])   
+        # ax.legend(ncols=2, loc="upper center")
+    fig.legend(['Audio Correlation', 'Visual Correlation'], loc="upper center", ncol=2, bbox_to_anchor=(0.5, 1.005))
+
+    # Remove unused subplots
+    for j in range(i + 1, len(axes_flat)):
+        fig.delaxes(axes_flat[j])
+
+    plt.suptitle(f'.')
     plt.show()
 
 
@@ -352,7 +412,7 @@ def game_dtw_scatter(data_dict):
     for session_id, session_data in data_dict.items():
         for group_id, group_data in session_data.items():
             fig, axes = plt.subplots(5, 6, figsize=(14, 10), constrained_layout=True)
-            # fig.suptitle(f"Resampled Engagement Data for Session {session_id}", fontsize=16)
+            fig.suptitle(f"Session {session_id}", fontsize=16)
             axes = axes.flatten()
             for participant_id, participant_data in group_data.items():
                 for game_name, game_values in participant_data["Engagement"].items():
@@ -367,7 +427,8 @@ def game_dtw_scatter(data_dict):
                         # ax.legend()
                     except TypeError:
                         pass
-            plt.savefig(f"./Figures/{session_id}-{group_id}.png")
+            # plt.savefig(f"./Figures/{session_id}-{group_id}.png")
+            plt.show()
             plt.close()
 
 
@@ -441,7 +502,7 @@ def plot_correlations(audio_correlations, visual_correlations, sort=True, title=
     fig.axes[0].get_xaxis().set_ticks([])
     plt.xlabel('Stimuli')
     plt.ylabel('Correlation')
-    plt.title(f'{title}: Correlation of Audio/Visual SDA with Engagement SDA')
+    plt.title(f'{title}: Correlation of Audio/Visual DTW with Engagement DTW')
     plt.tight_layout()
     plt.legend(ncols=2, loc="upper center")
     plt.show()
