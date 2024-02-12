@@ -234,13 +234,62 @@ def execute(time_windows, DESIRED_SESSIONS, distance_function):
     visual_data, audio_data, engagement_data = ignore_unwanted_sessions(visual_data, audio_data, engagement_data, gold_standard_data, DESIRED_SESSIONS)
     agreement_dict = build_agreement_dict(visual_data, audio_data, engagement_data, distance_function, tw=time_windows)
 
+    """games = {}
+    for session_id, session_data in agreement_dict.items():
+        group_data = session_data["Expert"].items()
+        for participant_id, participant_data in group_data:
+            type_data = participant_data['Engagement']
+            for game in type_data.keys():
+                if participant_id not in games.keys():
+                    games[participant_id] = [type_data[game]]
+                else:
+                    games[participant_id].append(type_data[game])
+
+    for game in games.keys():
+        print(f"{game}, {len(games[game])}")
+
+    print()
+    for game in games.values():
+        print(f"{np.round(np.mean(game), 4)}")
+
+
+    print()
+    for game in games.values():
+        print(f"{np.round(1.96*np.std(game)/np.sqrt(len(game)), 4)}")"""
+
     # plot_engagement_data(engagement_data, None)
-    # all_distance_matrices = create_distance_matrix(engagement_data, distance_function)
-    # min_distance_dict = create_distance_dict(engagement_data, distance_function)
+    all_distance_matrices = create_distance_matrix(engagement_data, distance_function)
+    min_distance_dict = create_distance_dict(engagement_data, distance_function)
     # plot_minimum_distance_histogram(all_distance_matrices)
     # plot_highlighted_engagement_data(engagement_data, all_distance_matrices)
+    num_participants = 5  # Number of participants
+    cmap = plt.get_cmap('viridis', 5)  # Getting the Viridis colormap for the number of participants
+    colors = [cmap(i) for i in range(num_participants)]  # Generating colors for each participant
+    markers = ['o', 'v', 's', '^', 'x']
+    plot_counter = 0
+    
+    participant_mapping = {}    
+    counter = 0
+    for paricipant in engagement_data['Session-1']['Expert'].keys():
+        participant_mapping[paricipant] = counter
+        counter+=1
 
-    # std1_filtered, std2_filtered = output_filtered_data(engagement_data, min_distance_dict, all_distance_matrices)
+    std1_filtered, std2_filtered = output_filtered_data(engagement_data, min_distance_dict, all_distance_matrices)
+    for session_id, session_data in std1_filtered.items():
+        plot_counter = 0
+        for group_id, group_data in session_data.items():
+            for participant_id, participant_data in group_data.items():
+                for game_name, game_data in participant_data.items():
+                    if session_id == "Session-1" and group_id == "Expert" and "void" in game_name:
+                        plt.errorbar(x=range(len(std2_filtered[session_id][group_id][participant_id][game_name])), y=std2_filtered[session_id][group_id][participant_id][game_name], color=colors[participant_mapping[participant_id]], marker=markers[participant_mapping[participant_id]], markevery=4, markeredgecolor='black', linewidth=2)
+                        plot_counter+=1
+
+        if plot_counter > 0:
+            plt.ylabel("Value")
+            plt.xlabel("Time (s)")
+            plt.show()
+    
+    exit()
     # plot_filtered_traces(engagement_data, std1_filtered, std2_filtered)
     # plot_engagement_data(std1_filtered, None)
     # plot_distance_matrices(all_distance_matrices)

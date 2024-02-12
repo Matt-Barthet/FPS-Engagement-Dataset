@@ -18,6 +18,8 @@ if __name__ == "__main__":
     moving_average_window = 1
     data_processing.execute(normalize_signals, time_window_size_ms, minimum_changes, moving_average_window, sessions)
     print("\rStep 2/4: Creating session dictionary, interpolating and smoothening signals... done!",)
+    
+    exit()
 
     print("\rStep 3/4: Calculating gold standard signals...", end="")
     gold_standard.execute()

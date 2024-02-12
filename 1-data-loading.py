@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 
 """
 Data loading script for Pagan data. This takes the individual CSV files outputted by Pagan and combines them into a single CSV file for each annotation type (visual, audio, engagement).
@@ -20,6 +21,9 @@ def latest_session(participant_data):
 def filter_duplicate_sessions(df, engagementSession=False):
     sessions = df['PaganSession'].unique()
     latest_sessions_df = pd.DataFrame()  
+
+    plotting = False
+
     for session in sessions:
         session_df = df[df['PaganSession'] == session]
         participants = session_df['Participant'].unique()
@@ -30,6 +34,16 @@ def filter_duplicate_sessions(df, engagementSession=False):
                 for game in games:
                     game_df = participant_df[participant_df['DatabaseName'] == game]
                     latest_session_df = game_df[game_df['SessionID'] == latest_session(game_df)]
+
+                    if not plotting and session == 'Session-1' and latest_session_df['Group'].values[0] == "Expert" and "_27" in game:
+                        plt.scatter(latest_session_df['VideoTime'].values[:-1], latest_session_df['Value'].values[:-1])
+                        plt.xlabel("Time (s)")
+                        plt.xticks([np.min(latest_session_df['VideoTime'].values[:-1]), np.max(latest_session_df['VideoTime'].values)], ['0', '60'])
+                        plt.yticks([np.min(latest_session_df['Value'].values[:-1]), np.max(latest_session_df['Value'].values)])
+
+                        plt.ylabel("Value")
+                        plt.show()
+
                     latest_sessions_df = pd.concat([latest_sessions_df, latest_session_df], ignore_index=True)
             else:
                 latest_session_df = participant_df[participant_df['SessionID'] == latest_session(participant_df)]

@@ -1,6 +1,9 @@
 import numpy as np
 from utility_functions import *
 import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.cm import coolwarm
+from matplotlib.colors import LinearSegmentedColormap
 
 """
 Basic signal processing script. Takes the CSV files outputted by the data loader and builds a dictionary of all the data, split by session, group, participant and game.
@@ -13,6 +16,13 @@ This script outputs three dictionaries containing the processed signals as numpy
 idg_annotators_session1 = ["BD7CE04E-99E3-7FA4-A15B-5625CD981638", "F868E6ED-CA85-FD16-942C-BE70BB997450", "1D8DFC94-778B-0969-9390-9F8A5B9C33EE", "89DA2498-EB31-04AF-2921-AEA70D626881", "49CAE400-6726-5DE5-398E-179FAD35B00A"]
 idg_annotators_session2 = ['2EEEFB7F-9312-F08D-97CA-28A3B631D29E', "3865D7ED-91D3-6EF6-DB13-DD7C46D9034E", "BA3206C6-52F9-5900-5A81-2188D3E88B59", "ED4B536F-21B5-262C-61BC-A4396AFC016B", "62FF5C7F-4E6B-BB00-3FE0-F8752641A074"]
 idg_annotators_session3 = ['5B89C3FA-A4AB-D90C-3FEF-885016FFB732', '738D09B9-A39F-819B-A237-C09448A2EB62', '9B3BB3E4-2AEB-482E-7316-F9715621C362', 'AE85275E-9C4D-D381-25F3-D823E24C0EF8', "F64F50A5-9F45-9753-0C9E-12AD4E483081"]
+
+
+num_participants = 5  # Number of participants
+cmap = plt.get_cmap('viridis', 5)  # Getting the Viridis colormap for the number of participants
+colors = [cmap(i) for i in range(num_participants)]  # Generating colors for each participant
+markers = ['o', 'v', 's', '^', 'x']
+plot_counter = 0
 
 def build_session_dict(df, engagement=False):
     pagan_sessions = df.groupby("PaganSession")
@@ -48,12 +58,15 @@ def build_session_dict(df, engagement=False):
                     del data_dict[session_name][group][participant_id]
     return data_dict
 
+import matplotlib.pyplot as plt
 
 def interpolate_data(data_dict, tw_size, MIN_CHANGES):
     interpolated_dict = {}
     counter = 0
     invalid = 0
+
     for session_id, session_data in data_dict.items():
+        plot_counter = 0
         interpolated_dict[session_id] = {"Expert": {}, "Mturk": {}}
         for group_name, group_data in session_data.items():
             # print(f'{session_id}-{group_name}')
@@ -71,6 +84,15 @@ def interpolate_data(data_dict, tw_size, MIN_CHANGES):
                         interpolated_dict[session_id][group_name][participant_id][game_name] = None
                     else:
                         interpolated_dict[session_id][group_name][participant_id][game_name] = interpolate_trace(df, tw_size)
+                    
+                    if session_id == "Session-1" and group_name == "Expert" and "void" in game_name:
+                        plt.errorbar(x=range(len(interpolate_trace(df, tw_size))), y=interpolate_trace(df, tw_size), color=colors[plot_counter], marker=markers[plot_counter], markevery=4, markeredgecolor='black', linewidth=2)
+                        plot_counter+=1
+
+        if plot_counter > 0:
+            plt.ylabel("Value")
+            plt.xlabel("Time (s)")
+            plt.show()
     # print(f"Number of traces interpolated: {counter}")
     # print(f"Number of invalid traces: {invalid}")
     return interpolated_dict
@@ -91,9 +113,70 @@ def interpolate_trace(pagan_trace, tw_size, time_col = 'VideoTime'):
         removed_trailing = annotation['Value'].values[:-2]
     return removed_trailing
 
-def normalize_data(data_dict, MA_SIZE):
+def normalize_per_participant(data_dict):
     normalized_dict = {}
     for session_id, session_data in data_dict.items():
+        normalized_dict[session_id] = {"Mturk": {}, "Expert": {}}
+        for group_id, group_data in session_data.items():
+            for participant_id, participant_data in group_data.items():
+                # Flatten all values across games for the participant to find global min and max
+                all_values = np.concatenate([game_data for game_data in participant_data.values() if game_data is not None])
+                if len(all_values) == 0:
+                    continue
+                global_min = np.min(all_values)
+                global_max = np.max(all_values)
+                normalized_dict[session_id][group_id][participant_id] = {}
+                for game_name, game_data in participant_data.items():
+                    if game_data is None:
+                        normalized_values = None
+                    else:
+                        # Apply normalization per participant across all games
+                        normalized_values = (game_data - global_min) / (global_max - global_min) if global_max != global_min else np.zeros_like(game_data)
+                    normalized_dict[session_id][group_id][participant_id][game_name] = normalized_values
+    return normalized_dict
+
+def calculate_average_engagement(engagement_data):
+    game_averages = {}
+
+    for session_data in engagement_data.values():
+        for participant_data in session_data.values():
+            for group_data in participant_data.values():
+                for game_name, engagement_scores in group_data.items():
+                    if engagement_scores is not None:
+                        if game_name not in game_averages:
+                            game_averages[game_name] = []
+                        game_averages[game_name].append(engagement_scores)
+
+    # Calculate average for each game
+    means, cis = [], []
+    games = []
+    for game, engagements in game_averages.items():
+        mean, confidence = compute_confidence_interval(engagements)
+        means.append(mean)
+        cis.append(confidence)
+        games.append(game)
+
+    # Plotting
+    fig, ax = plt.subplots()
+    bar_width = 0.5
+    index = range(len(games))
+    bars = ax.bar(index, means, bar_width, yerr=cis, label='Engagement')
+    ax.set_xlabel('Game')
+    ax.set_ylabel('Mean Engagement')
+    ax.set_title('Mean Engagement vs Game')
+    ax.set_xticks(index)
+    ax.set_xticklabels(games, rotation=90)
+    ax.legend()
+    plt.show()
+
+    # game_average_scores = {game: np.nanmean(np.vstack(scores), axis=0) for game, scores in game_averages.items()}
+    # return game_average_scores
+
+def normalize_data(data_dict, MA_SIZE):
+    normalized_dict = {}
+
+    for session_id, session_data in data_dict.items():
+        plot_counter = 0
         normalized_dict[session_id] = {"Mturk": {}, "Expert": {}}
         for group_id, group_data in session_data.items():
             for participant_id, participant_data in group_data.items():
@@ -107,6 +190,15 @@ def normalize_data(data_dict, MA_SIZE):
                     if MA_SIZE > 1:
                         normalized_values = avgfilter(normalized_values, MA_SIZE)
                     normalized_dict[session_id][group_id][participant_id][game_name] = normalized_values.tolist()
+
+                    if session_id == "Session-1" and group_id == "Expert" and "void" in game_name:
+                        plt.errorbar(x=range(len(normalized_dict[session_id][group_id][participant_id][game_name])), y=normalized_dict[session_id][group_id][participant_id][game_name], color=colors[plot_counter], marker=markers[plot_counter], markevery=4, markeredgecolor='black', linewidth=2)
+                        plot_counter+=1
+
+        if plot_counter > 0:
+            plt.ylabel("Value")
+            plt.xlabel("Time (s)")
+            plt.show()
     return normalized_dict
 
 
@@ -173,6 +265,10 @@ def execute(NORMALIZE, TW_SIZE, MIN_CHANGES, MA_SIZE, SESSIONS):
     visual_data = interpolate_data(green_brightness_data_dict, TW_SIZE, MIN_CHANGES)
     audio_data = interpolate_data(sound_pitch_data_dict, TW_SIZE, MIN_CHANGES)
 
+    engagement_data_pp = normalize_per_participant(engagement_data)
+
+    # print(calculate_average_engagement(engagement_data))
+
     if NORMALIZE:
         visual_data = normalize_data(visual_data, MA_SIZE)
         audio_data = normalize_data(audio_data, MA_SIZE)
@@ -180,7 +276,7 @@ def execute(NORMALIZE, TW_SIZE, MIN_CHANGES, MA_SIZE, SESSIONS):
 
     visual_data, audio_data, engagement_data = remove_bad_sessions(visual_data, audio_data, engagement_data, SESSIONS)
     engagement_data = add_missing_games(engagement_data)
-
+    
     np.save("./Processed Data/Session_Dict(Audio_Task).npy", audio_data)
     np.save("./Processed Data/Session_Dict(Visual_Task).npy", visual_data)
     np.save("./Processed Data/Session_Dict(Engagement_Task).npy", engagement_data)
