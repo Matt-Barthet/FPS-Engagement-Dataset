@@ -265,7 +265,7 @@ def execute(NORMALIZE, TW_SIZE, MIN_CHANGES, MA_SIZE, SESSIONS):
     visual_data = interpolate_data(green_brightness_data_dict, TW_SIZE, MIN_CHANGES)
     audio_data = interpolate_data(sound_pitch_data_dict, TW_SIZE, MIN_CHANGES)
 
-    engagement_data_pp = normalize_per_participant(engagement_data)
+    # engagement_data_pp = normalize_per_participant(engagement_data)
 
     # print(calculate_average_engagement(engagement_data))
 
